@@ -7,6 +7,7 @@ using System.Threading;
 using Glacier.Desktop.Grids;
 using Glacier.Desktop.Layout;
 using Glacier.Desktop.UI;
+using Glacier.Desktop.UI.Containers;
 using Glacier.Desktop.UI.Controls;
 using SkiaSharp;
 
@@ -229,6 +230,40 @@ public sealed unsafe class Win32Window : IDisposable
         UpdateWindow(_hWnd);
     }
 
+    public VisualNode? ActivePopup
+    {
+        get
+        {
+            if (RootVisual is Panel panel)
+            {
+                for (int i = 0; i < panel.Children.Count; i++)
+                {
+                    if (panel.Children[i] is MenuBar mb && mb.ActiveDropDown != null)
+                        return mb.ActiveDropDown;
+                }
+            }
+            return null;
+        }
+    }
+
+    public void CloseActiveMenus()
+    {
+        if (RootVisual is Panel panel)
+        {
+            for (int i = 0; i < panel.Children.Count; i++)
+            {
+                if (panel.Children[i] is MenuBar mb)
+                    mb.CloseMenu();
+            }
+        }
+    }
+
+    public void Close()
+    {
+        _isAlive = false;
+        PostQuitMessage(0);
+    }
+
     public void SetTitle(string title)
     {
         if (_hWnd != IntPtr.Zero)
@@ -245,6 +280,14 @@ public sealed unsafe class Win32Window : IDisposable
         RootVisual.Measure(Width, Height);
         RootVisual.Arrange(new LayoutBox(Width, Height, 0f, 0f));
         RootVisual.Render(_canvas);
+
+        // Render drop-down overlay on top of all windows and panels
+        var popup = ActivePopup;
+        if (popup != null)
+        {
+            popup.Render(_canvas);
+        }
+
         _canvas.Flush();
 
         if (_hWnd != IntPtr.Zero)
@@ -333,6 +376,44 @@ public sealed unsafe class Win32Window : IDisposable
                 int mx = (short)(lParam.ToInt64() & 0xFFFF);
                 int my = (short)((lParam.ToInt64() >> 16) & 0xFFFF);
 
+                var activeDrop = ActivePopup as MenuDropDown;
+                if (activeDrop != null)
+                {
+                    var hitItem = activeDrop.HitTest(mx, my);
+                    bool dropHoverChanged = false;
+                    foreach (var itm in activeDrop.Items)
+                    {
+                        bool isHov = (itm == hitItem && !itm.IsSeparator);
+                        if (itm.IsHovered != isHov)
+                        {
+                            itm.IsHovered = isHov;
+                            dropHoverChanged = true;
+                        }
+                    }
+                    if (dropHoverChanged)
+                    {
+                        RenderFrame();
+                    }
+
+                    if (hitItem is MenuItem m && !m.IsSeparator)
+                    {
+                        SetCursor(_hCursorHand);
+                        return IntPtr.Zero;
+                    }
+
+                    // If menu is open and mouse moves to another top-level menu item, switch menus
+                    if (RootVisual != null)
+                    {
+                        var hitRoot = RootVisual.HitTest(mx, my);
+                        if (hitRoot is MenuItem topMi && topMi.IsTopLevel && topMi.MenuBar != null && topMi.MenuBar.OpenMenu != topMi)
+                        {
+                            topMi.MenuBar.ToggleMenu(topMi);
+                            RenderFrame();
+                            return IntPtr.Zero;
+                        }
+                    }
+                }
+
                 if (_activeGrid != null && _isLButtonDown)
                 {
                     if (_activeGrid.HandleMouseMove(mx, my, true))
@@ -355,6 +436,16 @@ public sealed unsafe class Win32Window : IDisposable
                             RenderFrame();
                         }
                     }
+                    else if (hit is MenuItem mi && mi.IsTopLevel)
+                    {
+                        SetCursor(_hCursorHand);
+                        if (_hoveredButton != null)
+                        {
+                            _hoveredButton.IsHovered = false;
+                            _hoveredButton = null;
+                            RenderFrame();
+                        }
+                    }
                     else
                     {
                         SetCursor(_hCursorArrow);
@@ -374,6 +465,35 @@ public sealed unsafe class Win32Window : IDisposable
                 int ly = (short)((lParam.ToInt64() >> 16) & 0xFFFF);
 
                 MouseDownCallback?.Invoke(lx, ly);
+
+                // 1. If an active drop-down popup is open, check it first
+                var curPopup = ActivePopup;
+                if (curPopup != null)
+                {
+                    var hitDrop = curPopup.HitTest(lx, ly);
+                    if (hitDrop is MenuItem dropItem && !dropItem.IsSeparator)
+                    {
+                        dropItem.PerformClick();
+                        CloseActiveMenus();
+                        RenderFrame();
+                        return IntPtr.Zero;
+                    }
+                    else
+                    {
+                        // Clicked outside the drop-down popup
+                        var topHit = RootVisual?.HitTest(lx, ly);
+                        if (topHit is MenuItem topMi && topMi.IsTopLevel)
+                        {
+                            topMi.PerformClick();
+                            RenderFrame();
+                            return IntPtr.Zero;
+                        }
+
+                        // Dismiss the menu
+                        CloseActiveMenus();
+                        RenderFrame();
+                    }
+                }
 
                 if (RootVisual != null)
                 {
@@ -418,6 +538,13 @@ public sealed unsafe class Win32Window : IDisposable
                 int vk = (int)wParam.ToInt64();
                 if (vk == 0x1B) // Escape
                 {
+                    if (ActivePopup != null)
+                    {
+                        CloseActiveMenus();
+                        RenderFrame();
+                        return IntPtr.Zero;
+                    }
+
                     _isAlive = false;
                     PostQuitMessage(0);
                     return IntPtr.Zero;

@@ -68,23 +68,12 @@ public static class Program
         // 3. Construct Declarative Visual Tree
         var rootDock = new DockPanel();
 
-        // MenuBar (Top)
-        var menuBar = new MenuBar();
-        menuBar.Add(new MenuItem("File"));
-        menuBar.Add(new MenuItem("Edit"));
-        menuBar.Add(new MenuItem("View"));
-        menuBar.Add(new MenuItem("Tools"));
-        menuBar.Add(new MenuItem("Help"));
-        rootDock.Add(menuBar, DockPosition.Top);
+        var statusBar = new StatusBar("Ready | Click menus to open drop-downs | Click row to select | Mouse wheel to scroll | 120 FPS");
 
-        // Toolbar (Top)
-        var toolBar = new FlexRow(spacing: 8f) { Margin = new Thickness(4f, 2f) };
         var btnLoad = new DesktopButton("Reload 1M Records") { Width = 145f, Height = 28f };
         var btnScroll = new DesktopButton("Auto-Scroll: OFF") { Width = 140f, Height = 28f };
         var btnPlot = new DesktopButton("Update Chart") { Width = 120f, Height = 28f };
         var btnSimd = new DesktopButton("Run AVX-512 Scan") { Width = 140f, Height = 28f };
-
-        var statusBar = new StatusBar("Ready | Click any row to select | Mouse wheel to scroll | Native Win32 GDI | 120 FPS");
 
         int clickCount = 0;
         bool autoScroll = false; // OFF by default so grid is completely stable and usable
@@ -120,6 +109,71 @@ public static class Program
             statusBar.Status = $"SIMD Layout scan complete across 16 boxes (Action #{++clickCount})";
         };
 
+        var grid = new VirtualDataGrid
+        {
+            SourceDataFrame = polarisFrame,
+            Width = 780f
+        };
+
+        Win32Window? win32Instance = null;
+
+        // MenuBar (Top) with full Drop-Down Popups
+        var menuBar = new MenuBar();
+
+        var mFile = menuBar.AddMenu("File");
+        mFile.Add("Reload 1M Records", () => btnLoad.PerformClick(), "F5");
+        mFile.Add("Reset Grid (Row 0)", () => grid.ScrollToRow(0), "Home");
+        mFile.AddSeparator();
+        mFile.Add("Exit Application", () => win32Instance?.Close(), "Esc");
+
+        var mEdit = menuBar.AddMenu("Edit");
+        mEdit.Add("Select First Row", () => {
+            grid.SelectedRowIndex = 0;
+            grid.ScrollToRow(0);
+            grid.OnRowSelected?.Invoke(0);
+        }, "Home");
+        mEdit.Add("Select Last Row", () => {
+            long last = grid.TotalRowCount - 1;
+            grid.SelectedRowIndex = last;
+            grid.ScrollToRow(last);
+            grid.OnRowSelected?.Invoke(last);
+        }, "End");
+        mEdit.AddSeparator();
+        mEdit.Add("Clear Selection", () => {
+            grid.SelectedRowIndex = null;
+            statusBar.Status = "Row selection cleared";
+        });
+
+        var mView = menuBar.AddMenu("View");
+        mView.Add("Toggle Auto-Scroll", () => btnScroll.PerformClick(), "Space");
+        mView.Add("Scroll to Middle (Row 500k)", () => grid.ScrollToRow(500_000));
+        mView.Add("Scroll to Top", () => grid.ScrollToRow(0));
+
+        var mTools = menuBar.AddMenu("Tools");
+        mTools.Add("Update Plot Telemetry", () => btnPlot.PerformClick());
+        mTools.Add("Run AVX-512 SIMD Scan", () => btnSimd.PerformClick());
+        mTools.AddSeparator();
+        mTools.Add("Force GC Cleanup", () => {
+            long before = GC.GetTotalMemory(false);
+            GC.Collect();
+            GC.WaitForPendingFinalizers();
+            GC.Collect();
+            long after = GC.GetTotalMemory(true);
+            statusBar.Status = $"GC Complete: Freed {(before - after) / 1024.0:F1} KB | Active Heap: {after / (1024.0 * 1024.0):F2} MB";
+        });
+
+        var mHelp = menuBar.AddMenu("Help");
+        mHelp.Add("Glacier Architecture", () => {
+            statusBar.Status = "Glacier: 9-Pillar High-Performance C# .NET 10 Ecosystem replacing Python stack";
+        });
+        mHelp.Add("About Glacier.Desktop", () => {
+            statusBar.Status = "Glacier.Desktop v1.0 | Pure C# Win32 GDI | SkiaSharp | Sub-15ms cold start | 120 FPS";
+        });
+
+        rootDock.Add(menuBar, DockPosition.Top);
+
+        // Toolbar (Top)
+        var toolBar = new FlexRow(spacing: 8f) { Margin = new Thickness(4f, 2f) };
         toolBar.Add(btnLoad);
         toolBar.Add(btnScroll);
         toolBar.Add(btnPlot);
@@ -130,12 +184,6 @@ public static class Program
 
         // Main Center Area: Split Pane with VirtualDataGrid and PlotCanvas
         var mainSplit = new DockPanel();
-
-        var grid = new VirtualDataGrid
-        {
-            SourceDataFrame = polarisFrame,
-            Width = 780f
-        };
 
         // Interactive row selection callback
         grid.OnRowSelected = rowIndex =>
@@ -160,6 +208,7 @@ public static class Program
 
         // 4. Open Native Win32 Window on Screen
         using var win32 = new Win32Window("Glacier.Desktop Enterprise Dashboard (.NET 10)", width, height, rootDock);
+        win32Instance = win32;
 
         // Smooth mouse wheel scrolling
         win32.ScrollCallback = delta =>

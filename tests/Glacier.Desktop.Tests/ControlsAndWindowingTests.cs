@@ -57,4 +57,39 @@ public class ControlsAndWindowingTests
         window.Close();
         Assert.False(window.IsOpen);
     }
+
+    [Fact]
+    public void MenuBar_AddMenu_And_DropDown_Lifecycle()
+    {
+        var menuBar = new MenuBar();
+        var fileMenu = menuBar.AddMenu("File");
+        bool newClicked = false;
+        fileMenu.Add("New", () => newClicked = true, "Ctrl+N");
+        fileMenu.AddSeparator();
+        fileMenu.Add("Exit");
+
+        Assert.Single(menuBar.Children);
+        Assert.True(fileMenu.HasChildren);
+        Assert.Equal(3, fileMenu.Items.Count);
+
+        // Initially closed
+        Assert.Null(menuBar.OpenMenu);
+        Assert.Null(menuBar.ActiveDropDown);
+
+        // Toggle open
+        fileMenu.PerformClick();
+        Assert.Same(fileMenu, menuBar.OpenMenu);
+        Assert.NotNull(menuBar.ActiveDropDown);
+
+        // Hit test inside dropdown
+        var drop = menuBar.ActiveDropDown;
+        drop.UpdateLayout();
+        Assert.True(drop.Bounds.DesiredHeight > 50f);
+
+        // Click on first item
+        var item0 = fileMenu.Items[0];
+        item0.PerformClick();
+        Assert.True(newClicked);
+        Assert.Null(menuBar.OpenMenu); // Closes menu
+    }
 }
