@@ -35,6 +35,8 @@ public class MenuItem : VisualNode
         Padding = new Thickness(8f, 2f);
     }
 
+    public void PerformClick() => OnClick?.Invoke();
+
     public override void Measure(float availableWidth, float availableHeight)
     {
         using var paint = new SKPaint

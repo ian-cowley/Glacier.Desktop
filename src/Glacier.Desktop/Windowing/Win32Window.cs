@@ -4,6 +4,7 @@ using System;
 using System.Diagnostics;
 using System.Runtime.InteropServices;
 using System.Threading;
+using Glacier.Desktop.Grids;
 using Glacier.Desktop.Layout;
 using Glacier.Desktop.UI;
 using Glacier.Desktop.UI.Controls;
@@ -122,6 +123,12 @@ public sealed unsafe class Win32Window : IDisposable
     [DllImport("user32.dll")]
     private static extern bool InvalidateRect(IntPtr hWnd, IntPtr lpRect, bool bErase);
 
+    [DllImport("user32.dll")]
+    private static extern IntPtr LoadCursorW(IntPtr hInstance, IntPtr lpCursorName);
+
+    [DllImport("user32.dll")]
+    private static extern IntPtr SetCursor(IntPtr hCursor);
+
     [DllImport("gdi32.dll")]
     private static extern int SetDIBitsToDevice(
         IntPtr hdc, int xDest, int yDest, uint w, uint h,
@@ -154,16 +161,27 @@ public sealed unsafe class Win32Window : IDisposable
     private bool _isAlive = true;
     private bool _disposed;
 
+    private readonly IntPtr _hCursorArrow;
+    private readonly IntPtr _hCursorHand;
+    private DesktopButton? _hoveredButton;
+    private VirtualDataGrid? _activeGrid;
+    private bool _isLButtonDown;
+
     public int Width { get; }
     public int Height { get; }
     public VisualNode? RootVisual { get; set; }
     public Action<int>? ScrollCallback { get; set; }
+    public Action<int>? KeyDownCallback { get; set; }
+    public Action<float, float>? MouseDownCallback { get; set; }
 
     public Win32Window(string title, int width, int height, VisualNode? rootVisual = null)
     {
         Width = width;
         Height = height;
         RootVisual = rootVisual;
+
+        _hCursorArrow = LoadCursorW(IntPtr.Zero, (IntPtr)32512); // IDC_ARROW
+        _hCursorHand = LoadCursorW(IntPtr.Zero, (IntPtr)32649);  // IDC_HAND
 
         _bitmap = new SKBitmap(width, height, SKColorType.Bgra8888, SKAlphaType.Premul);
         _canvas = new SKCanvas(_bitmap);
@@ -278,9 +296,13 @@ public sealed unsafe class Win32Window : IDisposable
     {
         const uint WM_PAINT = 0x000F;
         const uint WM_DESTROY = 0x0002;
-        const uint WM_LBUTTONDOWN = 0x0201;
-        const uint WM_MOUSEWHEEL = 0x020A;
         const uint WM_ERASEBKGND = 0x0014;
+        const uint WM_SETCURSOR = 0x0020;
+        const uint WM_KEYDOWN = 0x0100;
+        const uint WM_MOUSEMOVE = 0x0200;
+        const uint WM_LBUTTONDOWN = 0x0201;
+        const uint WM_LBUTTONUP = 0x0202;
+        const uint WM_MOUSEWHEEL = 0x020A;
 
         switch (msg)
         {
@@ -299,22 +321,113 @@ public sealed unsafe class Win32Window : IDisposable
                 EndPaint(hWnd, ref ps);
                 return IntPtr.Zero;
 
-            case WM_LBUTTONDOWN:
-                int x = (short)(lParam.ToInt32() & 0xFFFF);
-                int y = (short)((lParam.ToInt32() >> 16) & 0xFFFF);
+            case WM_SETCURSOR:
+                if (_hoveredButton != null)
+                {
+                    SetCursor(_hCursorHand);
+                    return (IntPtr)1;
+                }
+                return DefWindowProcW(hWnd, msg, wParam, lParam);
+
+            case WM_MOUSEMOVE:
+                int mx = (short)(lParam.ToInt64() & 0xFFFF);
+                int my = (short)((lParam.ToInt64() >> 16) & 0xFFFF);
+
+                if (_activeGrid != null && _isLButtonDown)
+                {
+                    if (_activeGrid.HandleMouseMove(mx, my, true))
+                    {
+                        RenderFrame();
+                    }
+                }
+
                 if (RootVisual != null)
                 {
-                    var hit = RootVisual.HitTest(x, y);
+                    var hit = RootVisual.HitTest(mx, my);
                     if (hit is DesktopButton btn)
                     {
-                        btn.PerformClick();
-                        RenderFrame();
+                        SetCursor(_hCursorHand);
+                        if (_hoveredButton != btn)
+                        {
+                            if (_hoveredButton != null) _hoveredButton.IsHovered = false;
+                            _hoveredButton = btn;
+                            btn.IsHovered = true;
+                            RenderFrame();
+                        }
+                    }
+                    else
+                    {
+                        SetCursor(_hCursorArrow);
+                        if (_hoveredButton != null)
+                        {
+                            _hoveredButton.IsHovered = false;
+                            _hoveredButton = null;
+                            RenderFrame();
+                        }
                     }
                 }
                 return IntPtr.Zero;
 
+            case WM_LBUTTONDOWN:
+                _isLButtonDown = true;
+                int lx = (short)(lParam.ToInt64() & 0xFFFF);
+                int ly = (short)((lParam.ToInt64() >> 16) & 0xFFFF);
+
+                MouseDownCallback?.Invoke(lx, ly);
+
+                if (RootVisual != null)
+                {
+                    var hit = RootVisual.HitTest(lx, ly);
+                    if (hit is DesktopButton lBtn)
+                    {
+                        lBtn.IsPressed = true;
+                        lBtn.PerformClick();
+                        RenderFrame();
+                    }
+                    else if (hit is MenuItem item)
+                    {
+                        item.PerformClick();
+                        RenderFrame();
+                    }
+                    else if (hit is VirtualDataGrid g)
+                    {
+                        _activeGrid = g;
+                        if (g.HandleMouseDown(lx, ly))
+                        {
+                            RenderFrame();
+                        }
+                    }
+                }
+                return IntPtr.Zero;
+
+            case WM_LBUTTONUP:
+                _isLButtonDown = false;
+                if (_hoveredButton != null)
+                {
+                    _hoveredButton.IsPressed = false;
+                    RenderFrame();
+                }
+                if (_activeGrid != null)
+                {
+                    _activeGrid.HandleMouseUp();
+                    _activeGrid = null;
+                }
+                return IntPtr.Zero;
+
+            case WM_KEYDOWN:
+                int vk = (int)wParam.ToInt64();
+                if (vk == 0x1B) // Escape
+                {
+                    _isAlive = false;
+                    PostQuitMessage(0);
+                    return IntPtr.Zero;
+                }
+                KeyDownCallback?.Invoke(vk);
+                RenderFrame();
+                return IntPtr.Zero;
+
             case WM_MOUSEWHEEL:
-                int delta = (short)((wParam.ToInt32() >> 16) & 0xFFFF);
+                int delta = (short)((wParam.ToInt64() >> 16) & 0xFFFF);
                 ScrollCallback?.Invoke(delta);
                 RenderFrame();
                 return IntPtr.Zero;

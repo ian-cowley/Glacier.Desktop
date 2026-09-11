@@ -27,6 +27,11 @@ public sealed class VirtualDataGrid : VisualNode
     public float HeaderHeight { get; set; } = 32.0f;
     public float RowHeight { get; set; } = 28.0f;
     public float ScrollOffsetY { get; set; } = 0f;
+    public long? SelectedRowIndex { get; set; }
+    public Action<long>? OnRowSelected { get; set; }
+    public float MaxScrollOffsetY => MathF.Max(0f, (TotalRowCount * RowHeight) - MathF.Max(0f, Bounds.DesiredHeight - HeaderHeight));
+
+    private bool _isDraggingScrollbar;
 
     public long TotalRowCount => _source?.RowCount ?? 0;
     public int VisibleRowCount { get; private set; }
@@ -47,7 +52,70 @@ public sealed class VirtualDataGrid : VisualNode
         long total = TotalRowCount;
         if (total == 0) return;
         long target = Math.Clamp(rowIndex, 0, total - 1);
-        ScrollOffsetY = target * RowHeight;
+        ScrollOffsetY = Math.Clamp(target * RowHeight, 0f, MaxScrollOffsetY);
+    }
+
+    public void ScrollBy(float deltaPixels)
+    {
+        ScrollOffsetY = Math.Clamp(ScrollOffsetY + deltaPixels, 0f, MaxScrollOffsetY);
+    }
+
+    public bool HandleMouseDown(float px, float py)
+    {
+        if (_source == null || TotalRowCount == 0) return false;
+
+        float gridX = Bounds.ActualX;
+        float gridY = Bounds.ActualY;
+        float gridW = Bounds.DesiredWidth;
+        float gridH = Bounds.DesiredHeight;
+        float bodyY = gridY + HeaderHeight;
+        float bodyH = gridH - HeaderHeight;
+
+        // Check scrollbar click (right 16px)
+        float trackW = 14f;
+        float trackX = gridX + gridW - trackW;
+        if (px >= trackX && px <= gridX + gridW && py >= bodyY && py <= gridY + gridH)
+        {
+            _isDraggingScrollbar = true;
+            float ratio = Math.Clamp((py - bodyY) / MathF.Max(1f, bodyH), 0f, 1f);
+            ScrollOffsetY = ratio * MaxScrollOffsetY;
+            return true;
+        }
+
+        // Check row click
+        if (py >= bodyY && py <= gridY + gridH && px >= gridX && px < trackX)
+        {
+            long clickedRow = (long)MathF.Floor((ScrollOffsetY + py - bodyY) / RowHeight);
+            if (clickedRow >= 0 && clickedRow < TotalRowCount)
+            {
+                SelectedRowIndex = clickedRow;
+                OnRowSelected?.Invoke(clickedRow);
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    public bool HandleMouseMove(float px, float py, bool isMouseDown)
+    {
+        if (_isDraggingScrollbar && isMouseDown)
+        {
+            float gridY = Bounds.ActualY;
+            float gridH = Bounds.DesiredHeight;
+            float bodyY = gridY + HeaderHeight;
+            float bodyH = gridH - HeaderHeight;
+
+            float ratio = Math.Clamp((py - bodyY) / MathF.Max(1f, bodyH), 0f, 1f);
+            ScrollOffsetY = ratio * MaxScrollOffsetY;
+            return true;
+        }
+        return false;
+    }
+
+    public void HandleMouseUp()
+    {
+        _isDraggingScrollbar = false;
     }
 
     public override void Measure(float availableWidth, float availableHeight)
@@ -122,15 +190,27 @@ public sealed class VirtualDataGrid : VisualNode
             IsAntialias = true
         };
 
+        using var selPaint = new SKPaint { Color = new SKColor(25, 75, 140, 240), Style = SKPaintStyle.Fill };
+        using var selBarPaint = new SKPaint { Color = Color4.GlacierBlue.ToSKColor(), Style = SKPaintStyle.Fill };
+
         for (int r = 0; r < rowsToRender; r++)
         {
             long rowIndex = startRow + r;
             if (rowIndex >= totalRows) break;
 
             float rowY = bodyY + (r * RowHeight) - (ScrollOffsetY % RowHeight);
-            var rowPaint = (rowIndex % 2 == 0) ? rowEvenPaint : rowOddPaint;
+            bool isSelected = rowIndex == SelectedRowIndex;
 
-            canvas.DrawRect(gridX, rowY, gridW, RowHeight, rowPaint);
+            if (isSelected)
+            {
+                canvas.DrawRect(gridX, rowY, gridW, RowHeight, selPaint);
+                canvas.DrawRect(gridX, rowY, 4f, RowHeight, selBarPaint);
+            }
+            else
+            {
+                var rowPaint = (rowIndex % 2 == 0) ? rowEvenPaint : rowOddPaint;
+                canvas.DrawRect(gridX, rowY, gridW, RowHeight, rowPaint);
+            }
 
             for (int c = 0; c < colCount; c++)
             {
@@ -143,6 +223,29 @@ public sealed class VirtualDataGrid : VisualNode
 
             canvas.DrawLine(gridX, rowY + RowHeight, gridX + gridW, rowY + RowHeight, linePaint);
         }
+
+        // 3. Render Modern Scrollbar
+        float trackW = 12f;
+        float trackX = gridX + gridW - trackW;
+        float trackY = bodyY;
+        float trackH = bodyH;
+
+        using var trackPaint = new SKPaint { Color = new SKColor(20, 24, 32, 200), Style = SKPaintStyle.Fill };
+        canvas.DrawRect(trackX, trackY, trackW, trackH, trackPaint);
+
+        float viewRatio = trackH / MathF.Max(trackH, TotalRowCount * RowHeight);
+        float thumbH = Math.Clamp(trackH * viewRatio, 24f, trackH);
+        float scrollRatio = MaxScrollOffsetY > 0 ? Math.Clamp(ScrollOffsetY / MaxScrollOffsetY, 0f, 1f) : 0f;
+        float thumbY = trackY + scrollRatio * (trackH - thumbH);
+
+        using var thumbPaint = new SKPaint
+        {
+            Color = _isDraggingScrollbar ? Color4.GlacierBlue.ToSKColor() : new SKColor(70, 95, 130, 220),
+            Style = SKPaintStyle.Fill,
+            IsAntialias = true
+        };
+        var thumbRect = new SKRoundRect(new SKRect(trackX + 2f, thumbY, trackX + trackW - 2f, thumbY + thumbH), 4f);
+        canvas.DrawRoundRect(thumbRect, thumbPaint);
 
         canvas.Restore();
     }

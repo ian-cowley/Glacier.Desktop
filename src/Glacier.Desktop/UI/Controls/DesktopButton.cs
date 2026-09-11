@@ -14,7 +14,12 @@ public class DesktopButton : VisualNode
     public float FontSize { get; set; } = 13f;
     public Color4 TextColor { get; set; } = Color4.White;
     public Color4 BorderColor { get; set; } = Color4.BorderColor;
+    public Color4 HoverBackgroundColor { get; set; } = new Color4(45, 55, 75, 255);
+    public Color4 HoverBorderColor { get; set; } = Color4.GlacierBlue;
+    public Color4 PressedBackgroundColor { get; set; } = new Color4(30, 70, 110, 255);
     public float CornerRadius { get; set; } = 6f;
+    public bool IsHovered { get; set; }
+    public bool IsPressed { get; set; }
     public Action? OnClick { get; set; }
 
     public DesktopButton(string text = "Button", Action? onClick = null)
@@ -43,10 +48,13 @@ public class DesktopButton : VisualNode
     {
         if (!IsVisible) return;
 
+        Color4 currentBg = IsPressed ? PressedBackgroundColor : (IsHovered ? HoverBackgroundColor : BackgroundColor);
+        Color4 currentBorder = (IsHovered || IsPressed) ? HoverBorderColor : BorderColor;
+
         // Draw background
         using var bgPaint = new SKPaint
         {
-            Color = BackgroundColor.ToSKColor(),
+            Color = currentBg.ToSKColor(),
             Style = SKPaintStyle.Fill,
             IsAntialias = true
         };
@@ -57,9 +65,9 @@ public class DesktopButton : VisualNode
         // Draw border
         using var borderPaint = new SKPaint
         {
-            Color = BorderColor.ToSKColor(),
+            Color = currentBorder.ToSKColor(),
             Style = SKPaintStyle.Stroke,
-            StrokeWidth = 1f,
+            StrokeWidth = IsHovered ? 1.5f : 1f,
             IsAntialias = true
         };
         canvas.DrawRoundRect(rect, borderPaint);

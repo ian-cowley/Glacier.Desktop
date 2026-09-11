@@ -80,14 +80,14 @@ public static class Program
         // Toolbar (Top)
         var toolBar = new FlexRow(spacing: 8f) { Margin = new Thickness(4f, 2f) };
         var btnLoad = new DesktopButton("Reload 1M Records") { Width = 145f, Height = 28f };
-        var btnScroll = new DesktopButton("Auto-Scroll: ON") { Width = 140f, Height = 28f };
+        var btnScroll = new DesktopButton("Auto-Scroll: OFF") { Width = 140f, Height = 28f };
         var btnPlot = new DesktopButton("Update Chart") { Width = 120f, Height = 28f };
         var btnSimd = new DesktopButton("Run AVX-512 Scan") { Width = 140f, Height = 28f };
 
-        var statusBar = new StatusBar("Ready | Native Win32 GDI | Polaris 1,000,000 Rows | 120 FPS Target");
+        var statusBar = new StatusBar("Ready | Click any row to select | Mouse wheel to scroll | Native Win32 GDI | 120 FPS");
 
         int clickCount = 0;
-        bool autoScroll = true;
+        bool autoScroll = false; // OFF by default so grid is completely stable and usable
 
         btnLoad.OnClick = () =>
         {
@@ -99,7 +99,9 @@ public static class Program
         {
             autoScroll = !autoScroll;
             btnScroll.Text = autoScroll ? "Auto-Scroll: ON" : "Auto-Scroll: OFF";
-            statusBar.Status = $"Auto-Scroll set to {autoScroll} (Action #{++clickCount})";
+            statusBar.Status = autoScroll
+                ? $"Auto-Scroll ENABLED (Click grid or scroll wheel to pause) (Action #{++clickCount})"
+                : $"Auto-Scroll PAUSED (Action #{++clickCount})";
         };
 
         btnPlot.OnClick = () =>
@@ -134,6 +136,21 @@ public static class Program
             SourceDataFrame = polarisFrame,
             Width = 780f
         };
+
+        // Interactive row selection callback
+        grid.OnRowSelected = rowIndex =>
+        {
+            if (autoScroll)
+            {
+                autoScroll = false;
+                btnScroll.Text = "Auto-Scroll: OFF";
+            }
+            object? id = polarisFrame.Columns[0].Get((int)rowIndex);
+            object? val = polarisFrame.Columns[1].Get((int)rowIndex);
+            object? score = polarisFrame.Columns[2].Get((int)rowIndex);
+            statusBar.Status = $"Selected Row #{rowIndex:N0} | ID={id} | Value={val:F2} | Score={score:F1} | 0 bytes heap";
+        };
+
         mainSplit.Add(grid, DockPosition.Left);
 
         var plotCanvas = new PlotCanvas(plotFigure);
@@ -144,12 +161,64 @@ public static class Program
         // 4. Open Native Win32 Window on Screen
         using var win32 = new Win32Window("Glacier.Desktop Enterprise Dashboard (.NET 10)", width, height, rootDock);
 
+        // Smooth mouse wheel scrolling
         win32.ScrollCallback = delta =>
         {
-            grid.ScrollOffsetY -= delta * 0.5f;
-            if (grid.ScrollOffsetY < 0f) grid.ScrollOffsetY = 0f;
-            if (grid.ScrollOffsetY > 280000f) grid.ScrollOffsetY = 280000f;
-            statusBar.Status = $"Scrolled to Offset: {grid.ScrollOffsetY:F0} px (Row: {grid.ScrollOffsetY / 24f:N0})";
+            if (autoScroll)
+            {
+                autoScroll = false;
+                btnScroll.Text = "Auto-Scroll: OFF";
+            }
+            grid.ScrollBy(-delta * 0.7f);
+            long topRow = (long)MathF.Floor(grid.ScrollOffsetY / grid.RowHeight);
+            statusBar.Status = $"Scrolled to Row #{topRow:N0} of {grid.TotalRowCount:N0} (Offset: {grid.ScrollOffsetY:F0} px)";
+        };
+
+        // Keyboard navigation (Arrows, Page Up/Down, Space, Escape)
+        win32.KeyDownCallback = vk =>
+        {
+            if (autoScroll && (vk == 0x26 || vk == 0x28 || vk == 0x21 || vk == 0x22))
+            {
+                autoScroll = false;
+                btnScroll.Text = "Auto-Scroll: OFF";
+            }
+
+            switch (vk)
+            {
+                case 0x26: // VK_UP
+                    long prevRow = Math.Max(0, (grid.SelectedRowIndex ?? (long)(grid.ScrollOffsetY / grid.RowHeight)) - 1);
+                    grid.SelectedRowIndex = prevRow;
+                    grid.ScrollToRow(prevRow);
+                    grid.OnRowSelected?.Invoke(prevRow);
+                    break;
+
+                case 0x28: // VK_DOWN
+                    long nextRow = Math.Min(grid.TotalRowCount - 1, (grid.SelectedRowIndex ?? (long)(grid.ScrollOffsetY / grid.RowHeight)) + 1);
+                    grid.SelectedRowIndex = nextRow;
+                    grid.ScrollToRow(nextRow);
+                    grid.OnRowSelected?.Invoke(nextRow);
+                    break;
+
+                case 0x21: // VK_PRIOR (Page Up)
+                    grid.ScrollBy(-grid.RowHeight * 20);
+                    break;
+
+                case 0x22: // VK_NEXT (Page Down)
+                    grid.ScrollBy(grid.RowHeight * 20);
+                    break;
+
+                case 0x24: // VK_HOME
+                    grid.ScrollToRow(0);
+                    break;
+
+                case 0x23: // VK_END
+                    grid.ScrollToRow(grid.TotalRowCount - 1);
+                    break;
+
+                case 0x20: // Spacebar: toggle auto-scroll
+                    btnScroll.PerformClick();
+                    break;
+            }
         };
 
         int frameCounter = 0;
@@ -159,15 +228,21 @@ public static class Program
         {
             if (autoScroll)
             {
-                grid.ScrollOffsetY += 16f;
-                if (grid.ScrollOffsetY > 280000f) grid.ScrollOffsetY = 0f;
+                // Gentle readable auto-scroll (~60 px/sec = ~2 rows/sec)
+                grid.ScrollBy(60f * dt);
+                if (grid.ScrollOffsetY >= grid.MaxScrollOffsetY)
+                {
+                    grid.ScrollOffsetY = 0f;
+                }
             }
 
             frameCounter++;
             if (fpsSw.ElapsedMilliseconds >= 500)
             {
                 double currentFps = frameCounter / (fpsSw.ElapsedMilliseconds / 1000.0);
-                win32.SetTitle($"Glacier.Desktop | 1,000,000 Polaris Rows | {currentFps:F0} FPS (Row: {grid.ScrollOffsetY / 24f:N0})");
+                long topRow = (long)MathF.Floor(grid.ScrollOffsetY / grid.RowHeight);
+                string selText = grid.SelectedRowIndex.HasValue ? $"Selected: #{grid.SelectedRowIndex.Value:N0}" : "Click row to select";
+                win32.SetTitle($"Glacier.Desktop | 1,000,000 Polaris Rows | {currentFps:F0} FPS (Row: {topRow:N0} | {selText})");
                 frameCounter = 0;
                 fpsSw.Restart();
             }
