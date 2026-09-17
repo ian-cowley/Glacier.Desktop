@@ -368,6 +368,16 @@ public static class Program
         startupSw.Stop();
         Console.WriteLine($"[4/5] Glacier.Desktop cold startup complete in {startupSw.Elapsed.TotalMilliseconds:F2} ms (Target < 15 ms).");
 
+        string outDir = Path.Combine(AppContext.BaseDirectory, "output");
+        Directory.CreateDirectory(outDir);
+
+        if (window.Renderer is HeadlessWindowRenderer hwr1)
+        {
+            string pathOverview = Path.Combine(outDir, "demo_desktop_overview.png");
+            File.WriteAllBytes(pathOverview, hwr1.EncodeToPng());
+            Console.WriteLine($"      ✓ Saved dashboard overview -> {pathOverview}");
+        }
+
         Console.WriteLine("[5/5] Executing 1,000 simulated frames @ 120 FPS with continuous scrolling...");
         
         long initialGen0 = GC.CollectionCount(0);
@@ -384,6 +394,19 @@ public static class Program
             window.Step(0.00833f);
         }
         frameSw.Stop();
+
+        // Capture scrolled snapshot with selected row
+        grid.ScrollToRow(450_230);
+        grid.SelectedRowIndex = 450_235;
+        statusBar.Status = "Selected Row #450,235 | Virtualization active | Zero-copy Polaris DataFrame | 120 FPS";
+        window.Step(0.016f);
+
+        if (window.Renderer is HeadlessWindowRenderer hwr2)
+        {
+            string pathScrolled = Path.Combine(outDir, "demo_desktop_scrolled_grid.png");
+            File.WriteAllBytes(pathScrolled, hwr2.EncodeToPng());
+            Console.WriteLine($"      ✓ Saved scrolled grid snapshot -> {pathScrolled}");
+        }
 
         long finalGen0 = GC.CollectionCount(0) - initialGen0;
         long finalGen1 = GC.CollectionCount(1) - initialGen1;
