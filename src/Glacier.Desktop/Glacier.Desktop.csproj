@@ -31,7 +31,7 @@
   <ItemGroup>
     <PackageReference Include="SkiaSharp" Version="2.88.9" />
     <PackageReference Include="SkiaSharp.NativeAssets.Linux.NoDependencies" Version="2.88.9" />
-    <PackageReference Include="Glacier.Polaris" Version="1.0.14" />
-    <PackageReference Include="Glacier.Plot" Version="1.0.0" />
+    <PackageReference Include="Glacier.Polaris" Version="1.0.16" />
+    <PackageReference Include="Glacier.Plot" Version="1.0.1" />
   </ItemGroup>
 </Project>

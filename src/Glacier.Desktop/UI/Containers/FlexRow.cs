@@ -45,21 +45,24 @@ public class FlexRow : Panel
         int count = _children.Count;
         if (count == 0) return;
 
-        // Extract contiguous LayoutBox span for SIMD Kogge-Stone layout arrange
-        Span<LayoutBox> boxes = stackalloc LayoutBox[count];
+        // Use high-performance SoA layout arrange buffers
+        Span<float> widths = stackalloc float[count];
+        Span<float> actualXs = stackalloc float[count];
         for (int i = 0; i < count; i++)
         {
-            boxes[i] = _children[i].Bounds;
+            widths[i] = _children[i].Bounds.DesiredWidth;
         }
 
         float startX = Bounds.ActualX + Padding.Left;
-        LayoutKernels.ArrangeHorizontalRow(boxes, startX, Spacing);
+        LayoutKernels.ArrangeHorizontalRowSoA(widths, actualXs, startX, Spacing);
 
         float curY = Bounds.ActualY + Padding.Top;
         for (int i = 0; i < count; i++)
         {
-            boxes[i].ActualY = curY;
-            _children[i].Arrange(boxes[i]);
+            var b = _children[i].Bounds;
+            b.ActualX = actualXs[i];
+            b.ActualY = curY;
+            _children[i].Arrange(b);
         }
     }
 }

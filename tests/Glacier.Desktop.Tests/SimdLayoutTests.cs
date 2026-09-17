@@ -51,4 +51,52 @@ public class SimdLayoutTests
         // Box 3: starts at 80
         Assert.Equal(80f, boxes[3].ActualX);
     }
+
+    [Fact]
+    public void ArrangeHorizontalRowSoA_MatchesAnalyticalPrefixSum()
+    {
+        const int count = 25; // Exercises 16-element AVX-512 + 8-element AVX2 + remainder scalar tail
+        var widths = new float[count];
+        var actualXs = new float[count];
+        for (int i = 0; i < count; i++)
+        {
+            widths[i] = 40f + (i * 2);
+        }
+
+        const float startX = 15f;
+        const float spacing = 5f;
+
+        LayoutKernels.ArrangeHorizontalRowSoA(widths, actualXs, startX, spacing);
+
+        float expectedX = startX;
+        for (int i = 0; i < count; i++)
+        {
+            Assert.Equal(expectedX, actualXs[i], 2);
+            expectedX += widths[i] + spacing;
+        }
+    }
+
+    [Fact]
+    public void ArrangeHorizontalRowSoA_ParityWithAoS()
+    {
+        const int count = 64;
+        var boxes = new LayoutBox[count];
+        var widths = new float[count];
+        var actualXs = new float[count];
+
+        for (int i = 0; i < count; i++)
+        {
+            float w = (i % 3 == 0) ? -5f : (20f + i);
+            boxes[i] = new LayoutBox(w, 20f);
+            widths[i] = w;
+        }
+
+        LayoutKernels.ArrangeHorizontalRow(boxes, 10f, 4f);
+        LayoutKernels.ArrangeHorizontalRowSoA(widths, actualXs, 10f, 4f);
+
+        for (int i = 0; i < count; i++)
+        {
+            Assert.Equal(boxes[i].ActualX, actualXs[i], 3);
+        }
+    }
 }

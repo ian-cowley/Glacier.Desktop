@@ -17,7 +17,80 @@ public class Program
 {
     public static void Main(string[] args)
     {
+        if (args.Length > 0 && args[0] == "--standalone")
+        {
+            RunStandaloneBenchmark();
+            return;
+        }
+
         BenchmarkRunner.Run<DesktopBenchmarks>();
+    }
+
+    private static void RunStandaloneBenchmark()
+    {
+        Console.WriteLine("===============================================================================");
+        Console.WriteLine("  GLACIER.DESKTOP SIMD KOGGE-STONE LAYOUT BENCHMARK (10,000 BOXES)");
+        Console.WriteLine("===============================================================================\n");
+
+        const int boxCount = 10000;
+        const int iterations = 50000;
+        var boxes = new LayoutBox[boxCount];
+        var scalarBoxes = new LayoutBox[boxCount];
+        var soaWidths = new float[boxCount];
+        var soaActualXs = new float[boxCount];
+
+        for (int i = 0; i < boxCount; i++)
+        {
+            boxes[i] = new LayoutBox(60f + (i % 50), 28f, 0f, 0f);
+            scalarBoxes[i] = boxes[i];
+            soaWidths[i] = boxes[i].DesiredWidth;
+        }
+
+        // Warmup
+        for (int w = 0; w < 500; w++)
+        {
+            LayoutKernels.ArrangeHorizontalRow(boxes.AsSpan(), 0f, 5f);
+            LayoutKernels.ArrangeHorizontalRowSoA(soaWidths.AsSpan(), soaActualXs.AsSpan(), 0f, 5f);
+        }
+
+        // 1. Scalar Baseline
+        var swScalar = System.Diagnostics.Stopwatch.StartNew();
+        for (int it = 0; it < iterations; it++)
+        {
+            float curX = 0f;
+            for (int i = 0; i < boxCount; i++)
+            {
+                scalarBoxes[i].ActualX = curX;
+                curX += scalarBoxes[i].DesiredWidth + 5f;
+            }
+        }
+        swScalar.Stop();
+        double scalarUs = (swScalar.Elapsed.TotalMicroseconds) / iterations;
+        double scalarOps = (boxCount * (double)iterations) / swScalar.Elapsed.TotalSeconds;
+
+        // 2. AVX-512 AoS
+        var swAos = System.Diagnostics.Stopwatch.StartNew();
+        for (int it = 0; it < iterations; it++)
+        {
+            LayoutKernels.ArrangeHorizontalRow(boxes.AsSpan(), 0f, 5f);
+        }
+        swAos.Stop();
+        double aosUs = (swAos.Elapsed.TotalMicroseconds) / iterations;
+        double aosOps = (boxCount * (double)iterations) / swAos.Elapsed.TotalSeconds;
+
+        // 3. AVX-512 SoA
+        var swSoa = System.Diagnostics.Stopwatch.StartNew();
+        for (int it = 0; it < iterations; it++)
+        {
+            LayoutKernels.ArrangeHorizontalRowSoA(soaWidths.AsSpan(), soaActualXs.AsSpan(), 0f, 5f);
+        }
+        swSoa.Stop();
+        double soaUs = (swSoa.Elapsed.TotalMicroseconds) / iterations;
+        double soaOps = (boxCount * (double)iterations) / swSoa.Elapsed.TotalSeconds;
+
+        Console.WriteLine($"Scalar Baseline: {scalarUs:F3} μs / 10k boxes ({scalarOps / 1e6:F2} M boxes/sec)");
+        Console.WriteLine($"AVX-512 AoS:     {aosUs:F3} μs / 10k boxes ({aosOps / 1e6:F2} M boxes/sec) - {scalarUs / aosUs:F2}x vs Scalar");
+        Console.WriteLine($"AVX-512 SoA:     {soaUs:F3} μs / 10k boxes ({soaOps / 1e6:F2} M boxes/sec) - {scalarUs / soaUs:F2}x vs Scalar, {aosUs / soaUs:F2}x vs AoS");
     }
 }
 
@@ -28,6 +101,8 @@ public class DesktopBenchmarks
     private const int BoxCount = 10000;
     private LayoutBox[] _boxes = null!;
     private LayoutBox[] _scalarBoxes = null!;
+    private float[] _soaWidths = null!;
+    private float[] _soaActualXs = null!;
 
     private DataFrame _polarisFrame = null!;
     private VirtualDataGrid _dataGrid = null!;
@@ -41,10 +116,13 @@ public class DesktopBenchmarks
     {
         _boxes = new LayoutBox[BoxCount];
         _scalarBoxes = new LayoutBox[BoxCount];
+        _soaWidths = new float[BoxCount];
+        _soaActualXs = new float[BoxCount];
         for (int i = 0; i < BoxCount; i++)
         {
             _boxes[i] = new LayoutBox(60f + (i % 50), 28f, 0f, 0f);
             _scalarBoxes[i] = _boxes[i];
+            _soaWidths[i] = _boxes[i].DesiredWidth;
         }
 
         _polarisFrame = PolarisGridBridge.CreateSyntheticBenchmarkFrame(1_000_000);
@@ -101,6 +179,12 @@ public class DesktopBenchmarks
     public void Benchmark_KoggeStone_SIMD()
     {
         LayoutKernels.ArrangeHorizontalRow(_boxes.AsSpan(), 0f, 5f);
+    }
+
+    [Benchmark(Description = "AVX-512/AVX2 Kogge-Stone SoA Row Arrange (10,000 Boxes)")]
+    public void Benchmark_KoggeStone_SoA()
+    {
+        LayoutKernels.ArrangeHorizontalRowSoA(_soaWidths.AsSpan(), _soaActualXs.AsSpan(), 0f, 5f);
     }
 
     [Benchmark(Baseline = true, Description = "Scalar Row Arrange Baseline (10,000 Boxes)")]
