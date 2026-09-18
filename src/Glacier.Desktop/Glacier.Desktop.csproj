@@ -12,7 +12,7 @@
 
     <!-- NuGet Package Properties -->
     <PackageId>Glacier.Desktop</PackageId>
-    <Version>1.0.0</Version>
+    <Version>1.0.1</Version>
     <Authors>Ian Cowley</Authors>
     <Company>Glacier High-Performance Ecosystem</Company>
     <Description>Hardware-accelerated native desktop GUI engine and virtualized data grid for .NET 10 Native AOT. Sub-15ms cold startup, SIMD Kogge-Stone layout calculations, and 1,000,000+ row virtual grids at 120 FPS. Native C# alternative to Python Tkinter and PyQt.</Description>
@@ -31,7 +31,7 @@
   <ItemGroup>
     <PackageReference Include="SkiaSharp" Version="2.88.9" />
     <PackageReference Include="SkiaSharp.NativeAssets.Linux.NoDependencies" Version="2.88.9" />
-    <PackageReference Include="Glacier.Polaris" Version="1.0.16" />
-    <PackageReference Include="Glacier.Plot" Version="1.0.1" />
+    <PackageReference Include="Glacier.Polaris" Version="1.0.17" />
+    <PackageReference Include="Glacier.Plot" Version="1.0.2" />
   </ItemGroup>
 </Project>

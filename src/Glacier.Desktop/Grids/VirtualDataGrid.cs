@@ -1,18 +1,49 @@
 namespace Glacier.Desktop.Grids;
 
 using System;
+using System.Globalization;
+using System.Runtime.CompilerServices;
 using Glacier.Desktop.Layout;
 using Glacier.Desktop.UI;
 using Glacier.Polaris;
+using Glacier.Polaris.Data;
 using SkiaSharp;
 
 /// <summary>
 /// High-performance GPU-rendered virtual data grid capable of rendering 1,000,000+ rows
 /// at a locked 120 FPS with zero heap allocations on scroll hot paths.
 /// </summary>
-public sealed class VirtualDataGrid : VisualNode
+public sealed class VirtualDataGrid : VisualNode, IDisposable
 {
     private DataFrame? _source;
+
+    private static readonly SKTypeface s_headerTypeface = SKTypeface.FromFamilyName("Segoe UI", SKFontStyleWeight.SemiBold, SKFontStyleWidth.Normal, SKFontStyleSlant.Upright);
+    private static readonly SKTypeface s_cellTypeface = SKTypeface.FromFamilyName("Segoe UI", SKFontStyleWeight.Normal, SKFontStyleWidth.Normal, SKFontStyleSlant.Upright);
+
+    private readonly SKPaint _headerPaint = new() { Style = SKPaintStyle.Fill };
+    private readonly SKPaint _headerTextPaint = new()
+    {
+        Typeface = s_headerTypeface,
+        TextSize = 12f,
+        IsAntialias = true
+    };
+    private readonly SKPaint _gridLinePaint = new() { StrokeWidth = 1f };
+    private readonly SKPaint _rowEvenPaint = new() { Style = SKPaintStyle.Fill };
+    private readonly SKPaint _rowOddPaint = new() { Style = SKPaintStyle.Fill };
+    private readonly SKPaint _cellTextPaint = new()
+    {
+        Typeface = s_cellTypeface,
+        TextSize = 12f,
+        IsAntialias = true
+    };
+    private readonly SKPaint _selPaint = new() { Color = new SKColor(25, 75, 140, 240), Style = SKPaintStyle.Fill };
+    private readonly SKPaint _selBarPaint = new() { Style = SKPaintStyle.Fill };
+    private readonly SKPaint _trackPaint = new() { Color = new SKColor(20, 24, 32, 200), Style = SKPaintStyle.Fill };
+    private readonly SKPaint _thumbPaint = new()
+    {
+        Style = SKPaintStyle.Fill,
+        IsAntialias = true
+    };
 
     public DataFrame? SourceDataFrame
     {
@@ -144,26 +175,19 @@ public sealed class VirtualDataGrid : VisualNode
         canvas.ClipRect(new SKRect(gridX, gridY, gridX + gridW, gridY + gridH));
 
         // 1. Render Column Headers
-        using var headerPaint = new SKPaint { Color = HeaderBg.ToSKColor(), Style = SKPaintStyle.Fill };
-        canvas.DrawRect(gridX, gridY, gridW, HeaderHeight, headerPaint);
+        _headerPaint.Color = HeaderBg.ToSKColor();
+        canvas.DrawRect(gridX, gridY, gridW, HeaderHeight, _headerPaint);
 
-        using var textPaint = new SKPaint
-        {
-            Typeface = SKTypeface.FromFamilyName("Segoe UI", SKFontStyleWeight.SemiBold, SKFontStyleWidth.Normal, SKFontStyleSlant.Upright),
-            TextSize = 12f,
-            Color = Color4.GlacierBlue.ToSKColor(),
-            IsAntialias = true
-        };
-
-        using var linePaint = new SKPaint { Color = GridLineColor.ToSKColor(), StrokeWidth = 1f };
+        _headerTextPaint.Color = Color4.GlacierBlue.ToSKColor();
+        _gridLinePaint.Color = GridLineColor.ToSKColor();
 
         for (int c = 0; c < colCount; c++)
         {
             float cx = gridX + c * colWidth;
-            canvas.DrawText(_source.Columns[c].Name, cx + 8f, gridY + 20f, textPaint);
-            canvas.DrawLine(cx, gridY, cx, gridY + gridH, linePaint);
+            canvas.DrawText(_source.Columns[c].Name, cx + 8f, gridY + 20f, _headerTextPaint);
+            canvas.DrawLine(cx, gridY, cx, gridY + gridH, _gridLinePaint);
         }
-        canvas.DrawLine(gridX, gridY + HeaderHeight, gridX + gridW, gridY + HeaderHeight, linePaint);
+        canvas.DrawLine(gridX, gridY + HeaderHeight, gridX + gridW, gridY + HeaderHeight, _gridLinePaint);
 
         // 2. Render Virtualized Rows
         long totalRows = TotalRowCount;
@@ -180,18 +204,10 @@ public sealed class VirtualDataGrid : VisualNode
         startRow = Math.Clamp(startRow, 0, totalRows);
         int rowsToRender = Math.Min(VisibleRowCount + 2, (int)(totalRows - startRow));
 
-        using var rowEvenPaint = new SKPaint { Color = RowBgEven.ToSKColor(), Style = SKPaintStyle.Fill };
-        using var rowOddPaint = new SKPaint { Color = RowBgOdd.ToSKColor(), Style = SKPaintStyle.Fill };
-        using var cellTextPaint = new SKPaint
-        {
-            Typeface = SKTypeface.FromFamilyName("Segoe UI", SKFontStyleWeight.Normal, SKFontStyleWidth.Normal, SKFontStyleSlant.Upright),
-            TextSize = 12f,
-            Color = TextColor.ToSKColor(),
-            IsAntialias = true
-        };
-
-        using var selPaint = new SKPaint { Color = new SKColor(25, 75, 140, 240), Style = SKPaintStyle.Fill };
-        using var selBarPaint = new SKPaint { Color = Color4.GlacierBlue.ToSKColor(), Style = SKPaintStyle.Fill };
+        _rowEvenPaint.Color = RowBgEven.ToSKColor();
+        _rowOddPaint.Color = RowBgOdd.ToSKColor();
+        _cellTextPaint.Color = TextColor.ToSKColor();
+        _selBarPaint.Color = Color4.GlacierBlue.ToSKColor();
 
         for (int r = 0; r < rowsToRender; r++)
         {
@@ -203,25 +219,22 @@ public sealed class VirtualDataGrid : VisualNode
 
             if (isSelected)
             {
-                canvas.DrawRect(gridX, rowY, gridW, RowHeight, selPaint);
-                canvas.DrawRect(gridX, rowY, 4f, RowHeight, selBarPaint);
+                canvas.DrawRect(gridX, rowY, gridW, RowHeight, _selPaint);
+                canvas.DrawRect(gridX, rowY, 4f, RowHeight, _selBarPaint);
             }
             else
             {
-                var rowPaint = (rowIndex % 2 == 0) ? rowEvenPaint : rowOddPaint;
+                var rowPaint = (rowIndex % 2 == 0) ? _rowEvenPaint : _rowOddPaint;
                 canvas.DrawRect(gridX, rowY, gridW, RowHeight, rowPaint);
             }
 
             for (int c = 0; c < colCount; c++)
             {
                 float cx = gridX + c * colWidth;
-                object? val = _source.Columns[c].Get((int)rowIndex);
-                string text = val?.ToString() ?? "null";
-
-                canvas.DrawText(text, cx + 8f, rowY + 19f, cellTextPaint);
+                RenderCell(canvas, _source.Columns[c], (int)rowIndex, cx + 8f, rowY + 19f);
             }
 
-            canvas.DrawLine(gridX, rowY + RowHeight, gridX + gridW, rowY + RowHeight, linePaint);
+            canvas.DrawLine(gridX, rowY + RowHeight, gridX + gridW, rowY + RowHeight, _gridLinePaint);
         }
 
         // 3. Render Modern Scrollbar
@@ -230,23 +243,137 @@ public sealed class VirtualDataGrid : VisualNode
         float trackY = bodyY;
         float trackH = bodyH;
 
-        using var trackPaint = new SKPaint { Color = new SKColor(20, 24, 32, 200), Style = SKPaintStyle.Fill };
-        canvas.DrawRect(trackX, trackY, trackW, trackH, trackPaint);
+        canvas.DrawRect(trackX, trackY, trackW, trackH, _trackPaint);
 
         float viewRatio = trackH / MathF.Max(trackH, TotalRowCount * RowHeight);
         float thumbH = Math.Clamp(trackH * viewRatio, 24f, trackH);
         float scrollRatio = MaxScrollOffsetY > 0 ? Math.Clamp(ScrollOffsetY / MaxScrollOffsetY, 0f, 1f) : 0f;
         float thumbY = trackY + scrollRatio * (trackH - thumbH);
 
-        using var thumbPaint = new SKPaint
-        {
-            Color = _isDraggingScrollbar ? Color4.GlacierBlue.ToSKColor() : new SKColor(70, 95, 130, 220),
-            Style = SKPaintStyle.Fill,
-            IsAntialias = true
-        };
+        _thumbPaint.Color = _isDraggingScrollbar ? Color4.GlacierBlue.ToSKColor() : new SKColor(70, 95, 130, 220);
         var thumbRect = new SKRoundRect(new SKRect(trackX + 2f, thumbY, trackX + trackW - 2f, thumbY + thumbH), 4f);
-        canvas.DrawRoundRect(thumbRect, thumbPaint);
+        canvas.DrawRoundRect(thumbRect, _thumbPaint);
 
         canvas.Restore();
+    }
+
+    private static readonly string[] s_intStrings = InitializeIntStrings();
+    private static string[] InitializeIntStrings()
+    {
+        var arr = new string[1024];
+        for (int i = 0; i < arr.Length; i++) arr[i] = i.ToString();
+        return arr;
+    }
+
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    private void DrawSpan(SKCanvas canvas, ReadOnlySpan<char> chars, float x, float y)
+    {
+        canvas.DrawText(new string(chars), x, y, _cellTextPaint);
+    }
+
+    private void RenderCell(SKCanvas canvas, ISeries col, int rowIndex, float x, float y)
+    {
+        if (col.ValidityMask.IsNull(rowIndex))
+        {
+            canvas.DrawText("null", x, y, _cellTextPaint);
+            return;
+        }
+
+        Span<char> charBuffer = stackalloc char[64];
+        int written;
+
+        if (col is Series<int> intCol)
+        {
+            int intVal = intCol[rowIndex];
+            if ((uint)intVal < (uint)s_intStrings.Length)
+            {
+                canvas.DrawText(s_intStrings[intVal], x, y, _cellTextPaint);
+                return;
+            }
+            if (intVal.TryFormat(charBuffer, out written))
+            {
+                DrawSpan(canvas, charBuffer[..written], x, y);
+                return;
+            }
+        }
+        else if (col is Series<float> floatCol)
+        {
+            if (floatCol[rowIndex].TryFormat(charBuffer, out written, "G6", CultureInfo.InvariantCulture))
+            {
+                DrawSpan(canvas, charBuffer[..written], x, y);
+                return;
+            }
+        }
+        else if (col is Series<double> dblCol)
+        {
+            if (dblCol[rowIndex].TryFormat(charBuffer, out written, "G6", CultureInfo.InvariantCulture))
+            {
+                DrawSpan(canvas, charBuffer[..written], x, y);
+                return;
+            }
+        }
+        else if (col is Series<long> longCol)
+        {
+            if (longCol[rowIndex].TryFormat(charBuffer, out written))
+            {
+                DrawSpan(canvas, charBuffer[..written], x, y);
+                return;
+            }
+        }
+        else if (col is CategoricalSeries catCol)
+        {
+            uint code = catCol[rowIndex];
+            string catText = code < (uint)catCol.RevMap.Length ? catCol.RevMap[code] : "Unknown";
+            canvas.DrawText(catText, x, y, _cellTextPaint);
+            return;
+        }
+        else if (col is Utf8StringSeries utf8Col)
+        {
+            string text = utf8Col.GetString(rowIndex) ?? "null";
+            canvas.DrawText(text, x, y, _cellTextPaint);
+            return;
+        }
+        else if (col is Series<uint> uintCol)
+        {
+            if (uintCol[rowIndex].TryFormat(charBuffer, out written))
+            {
+                DrawSpan(canvas, charBuffer[..written], x, y);
+                return;
+            }
+        }
+        else if (col is Series<ulong> ulongCol)
+        {
+            if (ulongCol[rowIndex].TryFormat(charBuffer, out written))
+            {
+                DrawSpan(canvas, charBuffer[..written], x, y);
+                return;
+            }
+        }
+        else if (col is Series<bool> boolCol)
+        {
+            if (boolCol[rowIndex].TryFormat(charBuffer, out written))
+            {
+                DrawSpan(canvas, charBuffer[..written], x, y);
+                return;
+            }
+        }
+
+        object? val = col.Get(rowIndex);
+        string fallbackText = val?.ToString() ?? "null";
+        canvas.DrawText(fallbackText, x, y, _cellTextPaint);
+    }
+
+    public void Dispose()
+    {
+        _headerPaint.Dispose();
+        _headerTextPaint.Dispose();
+        _gridLinePaint.Dispose();
+        _rowEvenPaint.Dispose();
+        _rowOddPaint.Dispose();
+        _cellTextPaint.Dispose();
+        _selPaint.Dispose();
+        _selBarPaint.Dispose();
+        _trackPaint.Dispose();
+        _thumbPaint.Dispose();
     }
 }

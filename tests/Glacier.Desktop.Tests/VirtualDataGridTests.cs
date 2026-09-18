@@ -98,4 +98,37 @@ public class VirtualDataGridTests
         grid.ScrollBy(99999f);
         Assert.Equal(grid.MaxScrollOffsetY, grid.ScrollOffsetY); // Cannot exceed max
     }
+
+    [Fact]
+    public void VirtualDataGrid_RendersMultipleDataTypes_Successfully()
+    {
+        using var renderer = new HeadlessWindowRenderer(800, 600);
+
+        var intSeries = new Int32Series("IntCol", 10);
+        var floatSeries = new Float32Series("FloatCol", 10);
+        var catSeries = CategoricalSeries.FromStrings("CatCol", ["Alpha", "Beta", "Gamma", "Alpha", "Beta", "Gamma", "Alpha", "Beta", "Gamma", "Alpha"]);
+
+        for (int i = 0; i < 10; i++)
+        {
+            intSeries[i] = i * 10;
+            floatSeries[i] = i * 1.25f;
+        }
+
+        var df = new DataFrame([intSeries, floatSeries, catSeries]);
+        using var grid = new VirtualDataGrid
+        {
+            SourceDataFrame = df,
+            Width = 800f,
+            Height = 600f,
+            RowHeight = 25f,
+            HeaderHeight = 30f
+        };
+
+        renderer.BeginFrame();
+        renderer.RenderTree(grid, 800f, 600f);
+        renderer.EndFrame();
+
+        Assert.Equal(10, grid.TotalRowCount);
+        Assert.Equal(1, renderer.RenderedFrameCount);
+    }
 }
