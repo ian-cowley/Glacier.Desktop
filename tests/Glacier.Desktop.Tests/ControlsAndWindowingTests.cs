@@ -92,4 +92,36 @@ public class ControlsAndWindowingTests
         Assert.True(newClicked);
         Assert.Null(menuBar.OpenMenu); // Closes menu
     }
+
+    [Fact]
+    public void GlacierGraphicsRenderer_RendersAndEncodesPng()
+    {
+        using var renderer = new GlacierGraphicsRenderer(400, 300);
+        var panel = new Panel { BackgroundColor = Color4.DarkBackground };
+        var button = new DesktopButton("OK") { BackgroundColor = Color4.GlacierBlue };
+        panel.Add(button);
+
+        renderer.BeginFrame();
+        renderer.RenderTree(panel, 400, 300);
+        renderer.EndFrame();
+
+        Assert.Equal(1, renderer.RenderedFrameCount);
+        byte[] png = renderer.EncodeToPng();
+        Assert.NotNull(png);
+        Assert.True(png.Length > 64);
+        Assert.Equal(0x89, png[0]);
+        Assert.Equal(0x50, png[1]);
+        Assert.Equal(0x4E, png[2]);
+        Assert.Equal(0x47, png[3]);
+    }
+
+    [Fact]
+    public void GlacierDesktopWindowFactory_CreatesHeadlessWindow()
+    {
+        using var win = GlacierDesktopWindowFactory.CreateHeadlessWindow(800, 600);
+        Assert.NotNull(win);
+        Assert.Equal(800, win.Size.Width);
+        Assert.Equal(600, win.Size.Height);
+    }
 }
+
