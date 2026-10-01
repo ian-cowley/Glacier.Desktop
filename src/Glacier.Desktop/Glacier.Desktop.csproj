@@ -12,7 +12,7 @@
 
     <!-- NuGet Package Properties -->
     <PackageId>Glacier.Desktop</PackageId>
-    <Version>1.0.3</Version>
+    <Version>1.0.4</Version>
     <Authors>Ian Cowley</Authors>
     <Company>Glacier High-Performance Ecosystem</Company>
     <Description>Hardware-accelerated native desktop GUI engine and virtualized data grid for .NET 10 Native AOT. Sub-15ms cold startup, SIMD Kogge-Stone layout calculations, Glacier.Graphics and Glacier.Windowing foundational integration, and 1,000,000+ row virtual grids at 120 FPS.</Description>
@@ -28,28 +28,10 @@
     <None Include="..\..\README.md" Pack="true" PackagePath="\" />
   </ItemGroup>
 
-  <ItemGroup Condition="Exists('..\..\..\Glacier.Graphics\src\Glacier.Graphics\Glacier.Graphics.csproj')">
-    <ProjectReference Include="..\..\..\Glacier.Graphics\src\Glacier.Graphics\Glacier.Graphics.csproj" />
-  </ItemGroup>
-  <ItemGroup Condition="!Exists('..\..\..\Glacier.Graphics\src\Glacier.Graphics\Glacier.Graphics.csproj')">
-    <PackageReference Include="Glacier.Graphics" Version="1.0.0" />
-  </ItemGroup>
-
-  <ItemGroup Condition="Exists('..\..\..\Glacier.Windowing\src\Glacier.Windowing\Glacier.Windowing.csproj')">
-    <ProjectReference Include="..\..\..\Glacier.Windowing\src\Glacier.Windowing\Glacier.Windowing.csproj" />
-  </ItemGroup>
-  <ItemGroup Condition="!Exists('..\..\..\Glacier.Windowing\src\Glacier.Windowing\Glacier.Windowing.csproj')">
-    <PackageReference Include="Glacier.Windowing" Version="1.0.0" />
-  </ItemGroup>
-
-  <ItemGroup Condition="Exists('..\..\..\Glacier.Plot\src\Glacier.Plot\Glacier.Plot.csproj')">
-    <ProjectReference Include="..\..\..\Glacier.Plot\src\Glacier.Plot\Glacier.Plot.csproj" />
-  </ItemGroup>
-  <ItemGroup Condition="!Exists('..\..\..\Glacier.Plot\src\Glacier.Plot\Glacier.Plot.csproj')">
-    <PackageReference Include="Glacier.Plot" Version="1.0.3" />
-  </ItemGroup>
-
   <ItemGroup>
-    <PackageReference Include="Glacier.Polaris" Version="1.0.17" />
+    <PackageReference Include="Glacier.Graphics" Version="1.0.0" />
+    <PackageReference Include="Glacier.Windowing" Version="1.0.0" />
+    <PackageReference Include="Glacier.Plot" Version="1.0.4" />
+    <PackageReference Include="Glacier.Polaris" Version="1.0.19" />
   </ItemGroup>
 </Project>
