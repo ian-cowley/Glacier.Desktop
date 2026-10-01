@@ -5,7 +5,7 @@ using System.Collections;
 using System.Collections.Generic;
 using Glacier.Desktop.Layout;
 using Glacier.Desktop.UI;
-using SkiaSharp;
+using Glacier.Graphics;
 
 /// <summary>
 /// Base multi-child container for desktop layouts.
@@ -55,7 +55,7 @@ public class Panel : VisualNode, IEnumerable<VisualNode>
         }
     }
 
-    public override void Render(SKCanvas canvas)
+    public override void Render(IGraphicsCanvas canvas)
     {
         base.Render(canvas);
         for (int i = 0; i < _children.Count; i++)

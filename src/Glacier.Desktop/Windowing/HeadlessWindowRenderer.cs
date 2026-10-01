@@ -3,32 +3,37 @@ namespace Glacier.Desktop.Windowing;
 using System;
 using Glacier.Desktop.Layout;
 using Glacier.Desktop.UI;
-using SkiaSharp;
+using Glacier.Graphics;
+using Glacier.Graphics.Codecs.Png;
+using Glacier.Graphics.Raster;
 
 /// <summary>
 /// Deterministic headless software window renderer for CI test runners, benchmarks, and snapshot tests.
+/// Pure managed C# .NET 10 execution with zero third-party native binary dependencies.
 /// </summary>
 public sealed class HeadlessWindowRenderer : IWindowRenderer
 {
-    private readonly SKBitmap _bitmap;
-    private readonly SKCanvas _canvas;
+    private readonly LinearFramebuffer _framebuffer;
+    private readonly CpuGraphicsCanvas _canvas;
     private bool _disposed;
 
     public int Width { get; }
     public int Height { get; }
     public long RenderedFrameCount { get; private set; }
+    public LinearFramebuffer Framebuffer => _framebuffer;
+    public IGraphicsCanvas Canvas => _canvas;
 
     public HeadlessWindowRenderer(int width = 1280, int height = 800)
     {
         Width = width;
         Height = height;
-        _bitmap = new SKBitmap(width, height, SKColorType.Rgba8888, SKAlphaType.Premul);
-        _canvas = new SKCanvas(_bitmap);
+        _framebuffer = new LinearFramebuffer(width, height);
+        _canvas = new CpuGraphicsCanvas(_framebuffer);
     }
 
     public void BeginFrame()
     {
-        _canvas.Clear(SKColors.Transparent);
+        _canvas.Clear(Rgba32.Transparent);
     }
 
     public void RenderTree(VisualNode root, float width, float height)
@@ -46,9 +51,7 @@ public sealed class HeadlessWindowRenderer : IWindowRenderer
 
     public byte[] EncodeToPng()
     {
-        using var image = SKImage.FromBitmap(_bitmap);
-        using var data = image.Encode(SKEncodedImageFormat.Png, 100);
-        return data.ToArray();
+        return PngEncoder.Encode(_framebuffer);
     }
 
     public void Dispose()
@@ -56,7 +59,7 @@ public sealed class HeadlessWindowRenderer : IWindowRenderer
         if (!_disposed)
         {
             _canvas.Dispose();
-            _bitmap.Dispose();
+            _framebuffer.Dispose();
             _disposed = true;
         }
     }

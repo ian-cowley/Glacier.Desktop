@@ -3,8 +3,10 @@ namespace Glacier.Desktop.Interop;
 using System;
 using Glacier.Desktop.Layout;
 using Glacier.Desktop.UI;
+using Glacier.Graphics;
+using Glacier.Graphics.Raster;
+using Glacier.Graphics.Vector;
 using Glacier.Plot.Figures;
-using SkiaSharp;
 
 /// <summary>
 /// Hardware-accelerated desktop visual node hosting a Glacier.Plot Figure.
@@ -29,17 +31,18 @@ public sealed class PlotCanvas : VisualNode
         Bounds.DesiredHeight = h;
     }
 
-    public override void Render(SKCanvas canvas)
+    public override void Render(IGraphicsCanvas canvas)
     {
         if (!IsVisible) return;
         base.Render(canvas);
 
-        canvas.Save();
-        canvas.ClipRect(new SKRect(Bounds.ActualX, Bounds.ActualY, Bounds.ActualX + Bounds.DesiredWidth, Bounds.ActualY + Bounds.DesiredHeight));
-        canvas.Translate(Bounds.ActualX, Bounds.ActualY);
+        int w = (int)MathF.Max(1f, Bounds.DesiredWidth);
+        int h = (int)MathF.Max(1f, Bounds.DesiredHeight);
 
-        Figure.Render(canvas, (int)Bounds.DesiredWidth, (int)Bounds.DesiredHeight);
+        using var fb = new LinearFramebuffer(w, h);
+        using var figureCanvas = new CpuGraphicsCanvas(fb);
+        Figure.Render(figureCanvas, w, h);
 
-        canvas.Restore();
+        canvas.DrawImage(fb.AsReadOnlySpan2D(), Bounds.ActualX, Bounds.ActualY, Bounds.DesiredWidth, Bounds.DesiredHeight);
     }
 }

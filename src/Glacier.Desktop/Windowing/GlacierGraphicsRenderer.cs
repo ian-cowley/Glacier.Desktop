@@ -43,28 +43,8 @@ public sealed class GlacierGraphicsRenderer : IWindowRenderer
     {
         root.Measure(width, height);
         root.Arrange(new LayoutBox(width, height, 0f, 0f));
-        RenderVisualNode(root);
+        root.Render(_canvas);
         RenderedFrameCount++;
-    }
-
-    private void RenderVisualNode(VisualNode node)
-    {
-        if (!node.IsVisible) return;
-
-        if (node.BackgroundColor.A > 0)
-        {
-            var path = new VectorPath();
-            path.AddRect(node.Bounds.ActualX, node.Bounds.ActualY, node.Bounds.DesiredWidth, node.Bounds.DesiredHeight);
-            _canvas.FillPath(path, new Paint(new Rgba32(node.BackgroundColor.R, node.BackgroundColor.G, node.BackgroundColor.B, node.BackgroundColor.A), PaintStyle.Fill));
-        }
-
-        if (node is Glacier.Desktop.UI.Containers.Panel panel)
-        {
-            foreach (var child in panel.Children)
-            {
-                RenderVisualNode(child);
-            }
-        }
     }
 
     public void EndFrame()

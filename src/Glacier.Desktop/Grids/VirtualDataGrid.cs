@@ -7,7 +7,9 @@ using Glacier.Desktop.Layout;
 using Glacier.Desktop.UI;
 using Glacier.Polaris;
 using Glacier.Polaris.Data;
-using SkiaSharp;
+using Glacier.Graphics;
+using Glacier.Graphics.Text;
+using Glacier.Graphics.Vector;
 
 /// <summary>
 /// High-performance GPU-rendered virtual data grid capable of rendering 1,000,000+ rows
@@ -17,33 +19,12 @@ public sealed class VirtualDataGrid : VisualNode, IDisposable
 {
     private DataFrame? _source;
 
-    private static readonly SKTypeface s_headerTypeface = SKTypeface.FromFamilyName("Segoe UI", SKFontStyleWeight.SemiBold, SKFontStyleWidth.Normal, SKFontStyleSlant.Upright);
-    private static readonly SKTypeface s_cellTypeface = SKTypeface.FromFamilyName("Segoe UI", SKFontStyleWeight.Normal, SKFontStyleWidth.Normal, SKFontStyleSlant.Upright);
+    private static readonly Font s_headerFont = new(12f, bold: true);
+    private static readonly Font s_cellFont = new(12f, bold: false);
 
-    private readonly SKPaint _headerPaint = new() { Style = SKPaintStyle.Fill };
-    private readonly SKPaint _headerTextPaint = new()
-    {
-        Typeface = s_headerTypeface,
-        TextSize = 12f,
-        IsAntialias = true
-    };
-    private readonly SKPaint _gridLinePaint = new() { StrokeWidth = 1f };
-    private readonly SKPaint _rowEvenPaint = new() { Style = SKPaintStyle.Fill };
-    private readonly SKPaint _rowOddPaint = new() { Style = SKPaintStyle.Fill };
-    private readonly SKPaint _cellTextPaint = new()
-    {
-        Typeface = s_cellTypeface,
-        TextSize = 12f,
-        IsAntialias = true
-    };
-    private readonly SKPaint _selPaint = new() { Color = new SKColor(25, 75, 140, 240), Style = SKPaintStyle.Fill };
-    private readonly SKPaint _selBarPaint = new() { Style = SKPaintStyle.Fill };
-    private readonly SKPaint _trackPaint = new() { Color = new SKColor(20, 24, 32, 200), Style = SKPaintStyle.Fill };
-    private readonly SKPaint _thumbPaint = new()
-    {
-        Style = SKPaintStyle.Fill,
-        IsAntialias = true
-    };
+    private readonly Paint _selPaint = new(new Rgba32(25, 75, 140, 240), PaintStyle.Fill);
+    private readonly Paint _trackPaint = new(new Rgba32(20, 24, 32, 200), PaintStyle.Fill);
+    private Paint _cellTextPaint = new(Rgba32.White, PaintStyle.Fill);
 
     public DataFrame? SourceDataFrame
     {
@@ -156,7 +137,7 @@ public sealed class VirtualDataGrid : VisualNode, IDisposable
         VisibleRowCount = (int)MathF.Ceiling(bodyHeight / RowHeight) + 1;
     }
 
-    public override void Render(SKCanvas canvas)
+    public override void Render(IGraphicsCanvas canvas)
     {
         if (!IsVisible) return;
         base.Render(canvas);
@@ -172,22 +153,29 @@ public sealed class VirtualDataGrid : VisualNode, IDisposable
         float colWidth = gridW / MathF.Max(1, colCount);
 
         canvas.Save();
-        canvas.ClipRect(new SKRect(gridX, gridY, gridX + gridW, gridY + gridH));
+        var clipPath = new VectorPath();
+        clipPath.AddRect(gridX, gridY, gridW, gridH);
+        canvas.ClipPath(clipPath);
 
         // 1. Render Column Headers
-        _headerPaint.Color = HeaderBg.ToSKColor();
-        canvas.DrawRect(gridX, gridY, gridW, HeaderHeight, _headerPaint);
+        var headerPath = new VectorPath();
+        headerPath.AddRect(gridX, gridY, gridW, HeaderHeight);
+        canvas.FillPath(headerPath, new Paint(HeaderBg.ToRgba32(), PaintStyle.Fill));
 
-        _headerTextPaint.Color = Color4.GlacierBlue.ToSKColor();
-        _gridLinePaint.Color = GridLineColor.ToSKColor();
+        var headerTextPaint = new Paint(Color4.GlacierBlue.ToRgba32(), PaintStyle.Fill);
+        var gridLinePaint = new Paint(GridLineColor.ToRgba32(), PaintStyle.Stroke, 1f);
 
         for (int c = 0; c < colCount; c++)
         {
             float cx = gridX + c * colWidth;
-            canvas.DrawText(_source.Columns[c].Name, cx + 8f, gridY + 20f, _headerTextPaint);
-            canvas.DrawLine(cx, gridY, cx, gridY + gridH, _gridLinePaint);
+            canvas.DrawText(_source.Columns[c].Name.AsSpan(), cx + 8f, gridY + 20f, s_headerFont, headerTextPaint);
+            var colLine = new VectorPath();
+            colLine.AddLine(cx, gridY, cx, gridY + gridH);
+            canvas.DrawPath(colLine, gridLinePaint);
         }
-        canvas.DrawLine(gridX, gridY + HeaderHeight, gridX + gridW, gridY + HeaderHeight, _gridLinePaint);
+        var hLine = new VectorPath();
+        hLine.AddLine(gridX, gridY + HeaderHeight, gridX + gridW, gridY + HeaderHeight);
+        canvas.DrawPath(hLine, gridLinePaint);
 
         // 2. Render Virtualized Rows
         long totalRows = TotalRowCount;
@@ -204,10 +192,10 @@ public sealed class VirtualDataGrid : VisualNode, IDisposable
         startRow = Math.Clamp(startRow, 0, totalRows);
         int rowsToRender = Math.Min(VisibleRowCount + 2, (int)(totalRows - startRow));
 
-        _rowEvenPaint.Color = RowBgEven.ToSKColor();
-        _rowOddPaint.Color = RowBgOdd.ToSKColor();
-        _cellTextPaint.Color = TextColor.ToSKColor();
-        _selBarPaint.Color = Color4.GlacierBlue.ToSKColor();
+        var rowEvenPaint = new Paint(RowBgEven.ToRgba32(), PaintStyle.Fill);
+        var rowOddPaint = new Paint(RowBgOdd.ToRgba32(), PaintStyle.Fill);
+        _cellTextPaint = new Paint(TextColor.ToRgba32(), PaintStyle.Fill);
+        var selBarPaint = new Paint(Color4.GlacierBlue.ToRgba32(), PaintStyle.Fill);
 
         for (int r = 0; r < rowsToRender; r++)
         {
@@ -217,15 +205,20 @@ public sealed class VirtualDataGrid : VisualNode, IDisposable
             float rowY = bodyY + (r * RowHeight) - (ScrollOffsetY % RowHeight);
             bool isSelected = rowIndex == SelectedRowIndex;
 
+            var rowRect = new VectorPath();
+            rowRect.AddRect(gridX, rowY, gridW, RowHeight);
+
             if (isSelected)
             {
-                canvas.DrawRect(gridX, rowY, gridW, RowHeight, _selPaint);
-                canvas.DrawRect(gridX, rowY, 4f, RowHeight, _selBarPaint);
+                canvas.FillPath(rowRect, _selPaint);
+                var selBar = new VectorPath();
+                selBar.AddRect(gridX, rowY, 4f, RowHeight);
+                canvas.FillPath(selBar, selBarPaint);
             }
             else
             {
-                var rowPaint = (rowIndex % 2 == 0) ? _rowEvenPaint : _rowOddPaint;
-                canvas.DrawRect(gridX, rowY, gridW, RowHeight, rowPaint);
+                var rowPaint = (rowIndex % 2 == 0) ? rowEvenPaint : rowOddPaint;
+                canvas.FillPath(rowRect, rowPaint);
             }
 
             for (int c = 0; c < colCount; c++)
@@ -234,7 +227,9 @@ public sealed class VirtualDataGrid : VisualNode, IDisposable
                 RenderCell(canvas, _source.Columns[c], (int)rowIndex, cx + 8f, rowY + 19f);
             }
 
-            canvas.DrawLine(gridX, rowY + RowHeight, gridX + gridW, rowY + RowHeight, _gridLinePaint);
+            var rowLine = new VectorPath();
+            rowLine.AddLine(gridX, rowY + RowHeight, gridX + gridW, rowY + RowHeight);
+            canvas.DrawPath(rowLine, gridLinePaint);
         }
 
         // 3. Render Modern Scrollbar
@@ -243,16 +238,19 @@ public sealed class VirtualDataGrid : VisualNode, IDisposable
         float trackY = bodyY;
         float trackH = bodyH;
 
-        canvas.DrawRect(trackX, trackY, trackW, trackH, _trackPaint);
+        var trackRect = new VectorPath();
+        trackRect.AddRect(trackX, trackY, trackW, trackH);
+        canvas.FillPath(trackRect, _trackPaint);
 
         float viewRatio = trackH / MathF.Max(trackH, TotalRowCount * RowHeight);
         float thumbH = Math.Clamp(trackH * viewRatio, 24f, trackH);
         float scrollRatio = MaxScrollOffsetY > 0 ? Math.Clamp(ScrollOffsetY / MaxScrollOffsetY, 0f, 1f) : 0f;
         float thumbY = trackY + scrollRatio * (trackH - thumbH);
 
-        _thumbPaint.Color = _isDraggingScrollbar ? Color4.GlacierBlue.ToSKColor() : new SKColor(70, 95, 130, 220);
-        var thumbRect = new SKRoundRect(new SKRect(trackX + 2f, thumbY, trackX + trackW - 2f, thumbY + thumbH), 4f);
-        canvas.DrawRoundRect(thumbRect, _thumbPaint);
+        var thumbColor = _isDraggingScrollbar ? Color4.GlacierBlue.ToRgba32() : new Rgba32(70, 95, 130, 220);
+        var thumbRect = new VectorPath();
+        thumbRect.AddRect(trackX + 2f, thumbY, trackW - 4f, thumbH);
+        canvas.FillPath(thumbRect, new Paint(thumbColor, PaintStyle.Fill));
 
         canvas.Restore();
     }
@@ -266,16 +264,16 @@ public sealed class VirtualDataGrid : VisualNode, IDisposable
     }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    private void DrawSpan(SKCanvas canvas, ReadOnlySpan<char> chars, float x, float y)
+    private void DrawSpan(IGraphicsCanvas canvas, ReadOnlySpan<char> chars, float x, float y)
     {
-        canvas.DrawText(new string(chars), x, y, _cellTextPaint);
+        canvas.DrawText(chars, x, y, s_cellFont, _cellTextPaint);
     }
 
-    private void RenderCell(SKCanvas canvas, ISeries col, int rowIndex, float x, float y)
+    private void RenderCell(IGraphicsCanvas canvas, ISeries col, int rowIndex, float x, float y)
     {
         if (col.ValidityMask.IsNull(rowIndex))
         {
-            canvas.DrawText("null", x, y, _cellTextPaint);
+            canvas.DrawText("null".AsSpan(), x, y, s_cellFont, _cellTextPaint);
             return;
         }
 
@@ -287,7 +285,7 @@ public sealed class VirtualDataGrid : VisualNode, IDisposable
             int intVal = intCol[rowIndex];
             if ((uint)intVal < (uint)s_intStrings.Length)
             {
-                canvas.DrawText(s_intStrings[intVal], x, y, _cellTextPaint);
+                canvas.DrawText(s_intStrings[intVal].AsSpan(), x, y, s_cellFont, _cellTextPaint);
                 return;
             }
             if (intVal.TryFormat(charBuffer, out written))
@@ -324,13 +322,13 @@ public sealed class VirtualDataGrid : VisualNode, IDisposable
         {
             uint code = catCol[rowIndex];
             string catText = code < (uint)catCol.RevMap.Length ? catCol.RevMap[code] : "Unknown";
-            canvas.DrawText(catText, x, y, _cellTextPaint);
+            canvas.DrawText(catText.AsSpan(), x, y, s_cellFont, _cellTextPaint);
             return;
         }
         else if (col is Utf8StringSeries utf8Col)
         {
             string text = utf8Col.GetString(rowIndex) ?? "null";
-            canvas.DrawText(text, x, y, _cellTextPaint);
+            canvas.DrawText(text.AsSpan(), x, y, s_cellFont, _cellTextPaint);
             return;
         }
         else if (col is Series<uint> uintCol)
@@ -360,20 +358,10 @@ public sealed class VirtualDataGrid : VisualNode, IDisposable
 
         object? val = col.Get(rowIndex);
         string fallbackText = val?.ToString() ?? "null";
-        canvas.DrawText(fallbackText, x, y, _cellTextPaint);
+        canvas.DrawText(fallbackText.AsSpan(), x, y, s_cellFont, _cellTextPaint);
     }
 
     public void Dispose()
     {
-        _headerPaint.Dispose();
-        _headerTextPaint.Dispose();
-        _gridLinePaint.Dispose();
-        _rowEvenPaint.Dispose();
-        _rowOddPaint.Dispose();
-        _cellTextPaint.Dispose();
-        _selPaint.Dispose();
-        _selBarPaint.Dispose();
-        _trackPaint.Dispose();
-        _thumbPaint.Dispose();
     }
 }

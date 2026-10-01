@@ -3,9 +3,13 @@ namespace Glacier.Desktop.Windowing;
 using System;
 using Glacier.Desktop.Layout;
 using Glacier.Desktop.UI;
+using Glacier.Desktop.UI.Controls;
+using Glacier.Desktop.Grids;
+using Glacier.Windowing;
 
 /// <summary>
 /// Native desktop window orchestrator managing the visual tree, layout calculations, and GPU frames.
+/// Directly bridges with Glacier.Windowing native message loops to eliminate UI input polling jitter.
 /// </summary>
 public class GlacierWindow : IDisposable
 {
@@ -17,18 +21,73 @@ public class GlacierWindow : IDisposable
     public int Height { get; set; } = 800;
     public VisualNode? RootVisual { get; set; }
     public IWindowRenderer Renderer { get; private set; }
+    public IWindow? NativeWindow { get; private set; }
     public bool IsOpen => _isOpen;
     public long FrameCount { get; private set; }
+    public ulong InputDispatchedCount { get; private set; }
 
     public event Action? Opened;
     public event Action? Closed;
+    public event Action<InputEvent>? InputReceived;
 
-    public GlacierWindow(string title = "Glacier Desktop", int width = 1280, int height = 800, IWindowRenderer? renderer = null)
+    public GlacierWindow(string title = "Glacier Desktop", int width = 1280, int height = 800, IWindowRenderer? renderer = null, IWindow? nativeWindow = null)
     {
         Title = title;
         Width = width;
         Height = height;
         Renderer = renderer ?? new HeadlessWindowRenderer(width, height);
+        if (nativeWindow != null)
+        {
+            AttachNativeWindow(nativeWindow);
+        }
+    }
+
+    public void AttachNativeWindow(IWindow window)
+    {
+        NativeWindow = window;
+        NativeWindow.InputReceived += OnNativeInput;
+        NativeWindow.Resized += (w, h) =>
+        {
+            Width = w;
+            Height = h;
+            RenderFrame();
+        };
+        NativeWindow.Closing += Close;
+    }
+
+    private void OnNativeInput(InputEvent e)
+    {
+        InputDispatchedCount++;
+        InputReceived?.Invoke(e);
+
+        if (RootVisual != null)
+        {
+            switch (e.Type)
+            {
+                case InputEventType.MouseDown:
+                    var hit = RootVisual.HitTest(e.X, e.Y);
+                    if (hit is DesktopButton btn)
+                    {
+                        btn.PerformClick();
+                    }
+                    else if (hit is VirtualDataGrid grid)
+                    {
+                        grid.HandleMouseDown(e.X, e.Y);
+                    }
+                    break;
+                case InputEventType.MouseWheel:
+                    if (RootVisual is VirtualDataGrid vdg)
+                    {
+                        vdg.ScrollBy(-e.Y);
+                    }
+                    break;
+            }
+        }
+    }
+
+    public void PollEvents()
+    {
+        NativeWindow?.PollEvents();
     }
 
     public void Show()
@@ -40,6 +99,7 @@ public class GlacierWindow : IDisposable
 
     public void Step(float dt)
     {
+        PollEvents();
         FrameCount++;
         RenderFrame();
     }
@@ -64,6 +124,7 @@ public class GlacierWindow : IDisposable
         if (!_disposed)
         {
             Close();
+            NativeWindow?.Dispose();
             Renderer.Dispose();
             _disposed = true;
         }

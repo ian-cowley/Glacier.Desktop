@@ -1,7 +1,7 @@
 namespace Glacier.Desktop.UI;
 
 using System.Runtime.InteropServices;
-using SkiaSharp;
+using Glacier.Graphics;
 
 /// <summary>
 /// Fast unmanaged 32-bit RGBA color representation for desktop UI elements.
@@ -19,5 +19,8 @@ public readonly record struct Color4(byte R, byte G, byte B, byte A = 255)
     public static readonly Color4 TextMuted = new(160, 175, 195, 255);
     public static readonly Color4 HeaderBackground = new(22, 27, 34, 255);
 
-    public SKColor ToSKColor() => new(R, G, B, A);
+    public Rgba32 ToRgba32() => new(R, G, B, A);
+
+    public static implicit operator Rgba32(Color4 c) => new(c.R, c.G, c.B, c.A);
+    public static implicit operator Color4(Rgba32 c) => new(c.R, c.G, c.B, c.A);
 }

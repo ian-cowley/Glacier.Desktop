@@ -3,7 +3,8 @@ namespace Glacier.Desktop.UI.Controls;
 using System;
 using Glacier.Desktop.Layout;
 using Glacier.Desktop.UI;
-using SkiaSharp;
+using Glacier.Graphics;
+using Glacier.Graphics.Text;
 
 /// <summary>
 /// Text block control for high-performance sub-pixel text rendering.
@@ -28,35 +29,23 @@ public class TextBlock : VisualNode
 
     public override void Measure(float availableWidth, float availableHeight)
     {
-        using var paint = new SKPaint
-        {
-            Typeface = SKTypeface.FromFamilyName("Segoe UI", IsBold ? SKFontStyleWeight.Bold : SKFontStyleWeight.Normal, SKFontStyleWidth.Normal, SKFontStyleSlant.Upright),
-            TextSize = FontSize,
-            IsAntialias = true
-        };
+        var font = new Font(FontSize, bold: IsBold);
+        float textW = font.MeasureText(Text.AsSpan());
 
-        var bounds = new SKRect();
-        paint.MeasureText(Text, ref bounds);
-
-        Bounds.DesiredWidth = !float.IsNaN(Width) && Width > 0 ? Width : bounds.Width + Margin.Horizontal + Padding.Horizontal;
+        Bounds.DesiredWidth = !float.IsNaN(Width) && Width > 0 ? Width : textW + Margin.Horizontal + Padding.Horizontal;
         Bounds.DesiredHeight = !float.IsNaN(Height) && Height > 0 ? Height : FontSize * 1.35f + Margin.Vertical + Padding.Vertical;
     }
 
-    public override void Render(SKCanvas canvas)
+    public override void Render(IGraphicsCanvas canvas)
     {
         if (!IsVisible || string.IsNullOrEmpty(Text)) return;
         base.Render(canvas);
 
-        using var paint = new SKPaint
-        {
-            Typeface = SKTypeface.FromFamilyName("Segoe UI", IsBold ? SKFontStyleWeight.Bold : SKFontStyleWeight.Normal, SKFontStyleWidth.Normal, SKFontStyleSlant.Upright),
-            TextSize = FontSize,
-            Color = TextColor.ToSKColor(),
-            IsAntialias = true
-        };
+        var font = new Font(FontSize, bold: IsBold);
+        var paint = new Paint(TextColor.ToRgba32(), PaintStyle.Fill);
 
         float textX = Bounds.ActualX + Padding.Left;
         float textY = Bounds.ActualY + Padding.Top + FontSize;
-        canvas.DrawText(Text, textX, textY, paint);
+        canvas.DrawText(Text.AsSpan(), textX, textY, font, paint);
     }
 }

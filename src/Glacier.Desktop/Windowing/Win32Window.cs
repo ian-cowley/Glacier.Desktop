@@ -9,7 +9,8 @@ using Glacier.Desktop.Layout;
 using Glacier.Desktop.UI;
 using Glacier.Desktop.UI.Containers;
 using Glacier.Desktop.UI.Controls;
-using SkiaSharp;
+using Glacier.Graphics;
+using Glacier.Graphics.Raster;
 
 /// <summary>
 /// Native Windows GUI desktop host using Win32 GDI SetDIBitsToDevice.
@@ -156,8 +157,8 @@ public sealed unsafe class Win32Window : IDisposable
     private readonly WndProcDelegate _wndProc;
     private readonly GCHandle _wndProcHandle;
     private IntPtr _hWnd;
-    private readonly SKBitmap _bitmap;
-    private readonly SKCanvas _canvas;
+    private readonly LinearFramebuffer _framebuffer;
+    private readonly CpuGraphicsCanvas _canvas;
     private BITMAPINFO _bmi;
     private bool _isAlive = true;
     private bool _disposed;
@@ -184,8 +185,8 @@ public sealed unsafe class Win32Window : IDisposable
         _hCursorArrow = LoadCursorW(IntPtr.Zero, (IntPtr)32512); // IDC_ARROW
         _hCursorHand = LoadCursorW(IntPtr.Zero, (IntPtr)32649);  // IDC_HAND
 
-        _bitmap = new SKBitmap(width, height, SKColorType.Bgra8888, SKAlphaType.Premul);
-        _canvas = new SKCanvas(_bitmap);
+        _framebuffer = new LinearFramebuffer(width, height);
+        _canvas = new CpuGraphicsCanvas(_framebuffer);
 
         _bmi = new BITMAPINFO
         {
@@ -276,7 +277,7 @@ public sealed unsafe class Win32Window : IDisposable
     {
         if (RootVisual == null) return;
 
-        _canvas.Clear(SKColors.White);
+        _canvas.Clear(Rgba32.White);
         RootVisual.Measure(Width, Height);
         RootVisual.Arrange(new LayoutBox(Width, Height, 0f, 0f));
         RootVisual.Render(_canvas);
@@ -295,10 +296,13 @@ public sealed unsafe class Win32Window : IDisposable
             IntPtr hdc = GetDC(_hWnd);
             if (hdc != IntPtr.Zero)
             {
-                SetDIBitsToDevice(
-                    hdc, 0, 0, (uint)Width, (uint)Height,
-                    0, 0, 0, (uint)Height,
-                    _bitmap.GetPixels(), ref _bmi, 0);
+                fixed (byte* pixelPtr = _framebuffer.AsByteSpan())
+                {
+                    SetDIBitsToDevice(
+                        hdc, 0, 0, (uint)Width, (uint)Height,
+                        0, 0, 0, (uint)Height,
+                        (IntPtr)pixelPtr, ref _bmi, 0);
+                }
                 ReleaseDC(_hWnd, hdc);
             }
         }
@@ -356,10 +360,13 @@ public sealed unsafe class Win32Window : IDisposable
                 BeginPaint(hWnd, out PAINTSTRUCT ps);
                 if (ps.hdc != IntPtr.Zero)
                 {
-                    SetDIBitsToDevice(
-                        ps.hdc, 0, 0, (uint)Width, (uint)Height,
-                        0, 0, 0, (uint)Height,
-                        _bitmap.GetPixels(), ref _bmi, 0);
+                    fixed (byte* pixelPtr = _framebuffer.AsByteSpan())
+                    {
+                        SetDIBitsToDevice(
+                            ps.hdc, 0, 0, (uint)Width, (uint)Height,
+                            0, 0, 0, (uint)Height,
+                            (IntPtr)pixelPtr, ref _bmi, 0);
+                    }
                 }
                 EndPaint(hWnd, ref ps);
                 return IntPtr.Zero;
@@ -575,7 +582,7 @@ public sealed unsafe class Win32Window : IDisposable
             _disposed = true;
             _isAlive = false;
             _canvas.Dispose();
-            _bitmap.Dispose();
+            _framebuffer.Dispose();
             if (_wndProcHandle.IsAllocated) _wndProcHandle.Free();
         }
     }

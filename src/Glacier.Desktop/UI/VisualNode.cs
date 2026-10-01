@@ -3,7 +3,8 @@ namespace Glacier.Desktop.UI;
 using System;
 using System.Collections.Generic;
 using Glacier.Desktop.Layout;
-using SkiaSharp;
+using Glacier.Graphics;
+using Glacier.Graphics.Vector;
 
 /// <summary>
 /// Retained visual element in the Glacier.Desktop UI visual tree.
@@ -59,14 +60,15 @@ public abstract class VisualNode
         Bounds.DesiredHeight = !float.IsNaN(_explicitHeight) && _explicitHeight > 0 ? _explicitHeight : finalBounds.DesiredHeight;
     }
 
-    public virtual void Render(SKCanvas canvas)
+    public virtual void Render(IGraphicsCanvas canvas)
     {
         if (!IsVisible) return;
 
         if (BackgroundColor.A > 0)
         {
-            using var paint = new SKPaint { Color = BackgroundColor.ToSKColor(), Style = SKPaintStyle.Fill };
-            canvas.DrawRect(Bounds.ActualX, Bounds.ActualY, Bounds.DesiredWidth, Bounds.DesiredHeight, paint);
+            var path = new VectorPath();
+            path.AddRect(Bounds.ActualX, Bounds.ActualY, Bounds.DesiredWidth, Bounds.DesiredHeight);
+            canvas.FillPath(path, new Paint(BackgroundColor.ToRgba32(), PaintStyle.Fill));
         }
     }
 

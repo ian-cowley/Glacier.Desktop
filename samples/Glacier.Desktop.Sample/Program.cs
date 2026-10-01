@@ -167,7 +167,7 @@ public static class Program
             statusBar.Status = "Glacier: 9-Pillar High-Performance C# .NET 10 Ecosystem replacing Python stack";
         });
         mHelp.Add("About Glacier.Desktop", () => {
-            statusBar.Status = "Glacier.Desktop v1.0 | Pure C# Win32 GDI | SkiaSharp | Sub-15ms cold start | 120 FPS";
+            statusBar.Status = "Glacier.Desktop v1.0 | Pure C# Win32 GDI | Glacier.Graphics | Sub-15ms cold start | 120 FPS";
         });
 
         rootDock.Add(menuBar, DockPosition.Top);

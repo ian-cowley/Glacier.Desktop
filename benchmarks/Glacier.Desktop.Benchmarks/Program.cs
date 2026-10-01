@@ -11,7 +11,8 @@ using Glacier.Desktop.UI.Containers;
 using Glacier.Desktop.UI.Controls;
 using Glacier.Desktop.Windowing;
 using Glacier.Polaris;
-using SkiaSharp;
+using Glacier.Graphics;
+using Glacier.Graphics.Raster;
 
 public class Program
 {
@@ -106,8 +107,8 @@ public class DesktopBenchmarks
 
     private DataFrame _polarisFrame = null!;
     private VirtualDataGrid _dataGrid = null!;
-    private SKSurface _surface = null!;
-    private SKCanvas _canvas = null!;
+    private LinearFramebuffer _framebuffer = null!;
+    private CpuGraphicsCanvas _canvas = null!;
 
     private GlacierWindow _window = null!;
 
@@ -135,9 +136,8 @@ public class DesktopBenchmarks
         _dataGrid.Measure(1200f, 700f);
         _dataGrid.Arrange(new LayoutBox(1200f, 700f, 0f, 0f));
 
-        var imageInfo = new SKImageInfo(1280, 800, SKColorType.Rgba8888, SKAlphaType.Premul);
-        _surface = SKSurface.Create(imageInfo);
-        _canvas = _surface.Canvas;
+        _framebuffer = new LinearFramebuffer(1280, 800);
+        _canvas = new CpuGraphicsCanvas(_framebuffer);
 
         // Visual tree layout with menus, panels, buttons, and status bar
         var dock = new DockPanel();
@@ -171,7 +171,8 @@ public class DesktopBenchmarks
     [GlobalCleanup]
     public void Cleanup()
     {
-        _surface.Dispose();
+        _canvas.Dispose();
+        _framebuffer.Dispose();
         _window.Dispose();
     }
 
@@ -198,7 +199,7 @@ public class DesktopBenchmarks
         }
     }
 
-    [Benchmark(Description = "VirtualDataGrid 1M Row Viewport Slicing & Skia Render")]
+    [Benchmark(Description = "VirtualDataGrid 1M Row Viewport Slicing & Glacier.Graphics Render")]
     public void Benchmark_VirtualGrid_Render()
     {
         _dataGrid.ScrollOffsetY += 28f;

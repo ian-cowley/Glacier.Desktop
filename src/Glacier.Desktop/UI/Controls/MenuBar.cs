@@ -5,7 +5,9 @@ using System.Collections.Generic;
 using Glacier.Desktop.Layout;
 using Glacier.Desktop.UI;
 using Glacier.Desktop.UI.Containers;
-using SkiaSharp;
+using Glacier.Graphics;
+using Glacier.Graphics.Text;
+using Glacier.Graphics.Vector;
 
 /// <summary>
 /// Top-level desktop menu bar containing root menu items ("File", "Edit", etc.).
@@ -139,65 +141,47 @@ public class MenuItem : VisualNode
             return;
         }
 
-        using var paint = new SKPaint
-        {
-            Typeface = SKTypeface.FromFamilyName("Segoe UI", SKFontStyleWeight.Normal, SKFontStyleWidth.Normal, SKFontStyleSlant.Upright),
-            TextSize = 12f,
-            IsAntialias = true
-        };
-
-        float w = paint.MeasureText(Header);
+        var font = new Font(12f);
+        float w = font.MeasureText(Header.AsSpan());
         Bounds.DesiredWidth = w + Padding.Horizontal + 4f;
         Bounds.DesiredHeight = IsTopLevel ? 22f : 26f;
     }
 
-    public override void Render(SKCanvas canvas)
+    public override void Render(IGraphicsCanvas canvas)
     {
         if (!IsVisible) return;
 
         if (IsSeparator)
         {
-            using var sepPaint = new SKPaint { Color = new SKColor(55, 65, 85, 255), StrokeWidth = 1f };
+            var sepPath = new VectorPath();
             float sy = Bounds.ActualY + 4f;
-            canvas.DrawLine(Bounds.ActualX + 8f, sy, Bounds.ActualX + Bounds.DesiredWidth - 8f, sy, sepPaint);
+            sepPath.AddLine(Bounds.ActualX + 8f, sy, Bounds.ActualX + Bounds.DesiredWidth - 8f, sy);
+            canvas.DrawPath(sepPath, new Paint(new Rgba32(55, 65, 85, 255), PaintStyle.Stroke, 1f));
             return;
         }
 
         // Draw hover or open highlight
         if (IsHovered || IsOpen)
         {
-            using var bgPaint = new SKPaint
-            {
-                Color = IsTopLevel ? new SKColor(45, 55, 75, 255) : new SKColor(35, 75, 130, 240),
-                Style = SKPaintStyle.Fill,
-                IsAntialias = true
-            };
-            var r = new SKRoundRect(new SKRect(Bounds.ActualX, Bounds.ActualY, Bounds.ActualX + Bounds.DesiredWidth, Bounds.ActualY + Bounds.DesiredHeight), 4f);
-            canvas.DrawRoundRect(r, bgPaint);
+            var bgPath = new VectorPath();
+            bgPath.AddRect(Bounds.ActualX, Bounds.ActualY, Bounds.DesiredWidth, Bounds.DesiredHeight);
+            Rgba32 highlightBg = IsTopLevel ? new Rgba32(45, 55, 75, 255) : new Rgba32(35, 75, 130, 240);
+            canvas.FillPath(bgPath, new Paint(highlightBg, PaintStyle.Fill));
         }
 
-        using var paint = new SKPaint
-        {
-            Typeface = SKTypeface.FromFamilyName("Segoe UI", (IsHovered || IsOpen) ? SKFontStyleWeight.SemiBold : SKFontStyleWeight.Normal, SKFontStyleWidth.Normal, SKFontStyleSlant.Upright),
-            TextSize = 12f,
-            Color = (IsHovered || IsOpen) ? Color4.GlacierBlue.ToSKColor() : Color4.White.ToSKColor(),
-            IsAntialias = true
-        };
+        var font = new Font(12f, bold: IsHovered || IsOpen);
+        var fontColor = (IsHovered || IsOpen) ? Color4.GlacierBlue.ToRgba32() : Color4.White.ToRgba32();
+        var paint = new Paint(fontColor, PaintStyle.Fill);
 
         float ty = Bounds.ActualY + (Bounds.DesiredHeight + 8f) * 0.5f;
-        canvas.DrawText(Header, Bounds.ActualX + Padding.Left, ty, paint);
+        canvas.DrawText(Header.AsSpan(), Bounds.ActualX + Padding.Left, ty, font, paint);
 
         if (!string.IsNullOrEmpty(Shortcut) && !IsTopLevel)
         {
-            using var scPaint = new SKPaint
-            {
-                Typeface = SKTypeface.FromFamilyName("Segoe UI", SKFontStyleWeight.Normal, SKFontStyleWidth.Normal, SKFontStyleSlant.Upright),
-                TextSize = 11f,
-                Color = new SKColor(140, 155, 175, 255),
-                IsAntialias = true
-            };
-            float scW = scPaint.MeasureText(Shortcut);
-            canvas.DrawText(Shortcut, Bounds.ActualX + Bounds.DesiredWidth - Padding.Right - scW, ty, scPaint);
+            var scFont = new Font(11f);
+            var scPaint = new Paint(new Rgba32(140, 155, 175, 255), PaintStyle.Fill);
+            float scW = scFont.MeasureText(Shortcut.AsSpan());
+            canvas.DrawText(Shortcut.AsSpan(), Bounds.ActualX + Bounds.DesiredWidth - Padding.Right - scW, ty, scFont, scPaint);
         }
     }
 }
@@ -225,17 +209,13 @@ public class MenuDropDown : VisualNode
 
         // Measure item widths
         float maxW = 210f;
-        using var paint = new SKPaint
-        {
-            Typeface = SKTypeface.FromFamilyName("Segoe UI", SKFontStyleWeight.Normal, SKFontStyleWidth.Normal, SKFontStyleSlant.Upright),
-            TextSize = 12f
-        };
+        var font = new Font(12f);
 
         foreach (var item in _owner.Items)
         {
             if (item.IsSeparator) continue;
-            float textW = paint.MeasureText(item.Header);
-            float scW = !string.IsNullOrEmpty(item.Shortcut) ? paint.MeasureText(item.Shortcut) + 24f : 0f;
+            float textW = font.MeasureText(item.Header.AsSpan());
+            float scW = !string.IsNullOrEmpty(item.Shortcut) ? font.MeasureText(item.Shortcut.AsSpan()) + 24f : 0f;
             maxW = MathF.Max(maxW, textW + scW + 40f);
         }
 
@@ -276,7 +256,7 @@ public class MenuDropDown : VisualNode
         return null;
     }
 
-    public override void Render(SKCanvas canvas)
+    public override void Render(IGraphicsCanvas canvas)
     {
         UpdateLayout();
 
@@ -285,34 +265,14 @@ public class MenuDropDown : VisualNode
         float w = Bounds.DesiredWidth;
         float h = Bounds.DesiredHeight;
 
-        // Draw shadow
-        using var shadowPaint = new SKPaint
-        {
-            Color = new SKColor(0, 0, 0, 120),
-            MaskFilter = SKMaskFilter.CreateBlur(SKBlurStyle.Normal, 6f),
-            IsAntialias = true
-        };
-        canvas.DrawRoundRect(new SKRoundRect(new SKRect(x + 2f, y + 3f, x + w + 2f, y + h + 3f), 6f), shadowPaint);
+        var rectPath = new VectorPath();
+        rectPath.AddRect(x, y, w, h);
 
         // Draw background
-        using var bgPaint = new SKPaint
-        {
-            Color = BackgroundColor.ToSKColor(),
-            Style = SKPaintStyle.Fill,
-            IsAntialias = true
-        };
-        var rect = new SKRoundRect(new SKRect(x, y, x + w, y + h), 6f);
-        canvas.DrawRoundRect(rect, bgPaint);
+        canvas.FillPath(rectPath, new Paint(BackgroundColor.ToRgba32(), PaintStyle.Fill));
 
         // Draw border
-        using var borderPaint = new SKPaint
-        {
-            Color = Color4.BorderColor.ToSKColor(),
-            Style = SKPaintStyle.Stroke,
-            StrokeWidth = 1f,
-            IsAntialias = true
-        };
-        canvas.DrawRoundRect(rect, borderPaint);
+        canvas.DrawPath(rectPath, new Paint(Color4.BorderColor.ToRgba32(), PaintStyle.Stroke, 1f));
 
         // Draw items
         foreach (var item in _owner.Items)
