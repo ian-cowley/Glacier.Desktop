@@ -29,9 +29,9 @@
   </ItemGroup>
 
   <ItemGroup>
-    <PackageReference Include="Glacier.Graphics" Version="1.0.0" />
+    <PackageReference Include="Glacier.Graphics" Version="1.0.2" />
     <PackageReference Include="Glacier.Windowing" Version="1.0.0" />
-    <PackageReference Include="Glacier.Plot" Version="1.0.4" />
+    <PackageReference Include="Glacier.Plot" Version="1.0.5" />
     <PackageReference Include="Glacier.Polaris" Version="1.0.19" />
   </ItemGroup>
 </Project>
