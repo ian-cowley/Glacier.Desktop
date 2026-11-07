@@ -3,6 +3,7 @@ namespace Glacier.Desktop.Windowing;
 using System;
 using Glacier.Desktop.Layout;
 using Glacier.Desktop.UI;
+using Glacier.Desktop.UI.Containers;
 using Glacier.Desktop.UI.Controls;
 using Glacier.Desktop.Grids;
 using Glacier.Windowing;
@@ -76,13 +77,31 @@ public class GlacierWindow : IDisposable
                     }
                     break;
                 case InputEventType.MouseWheel:
-                    if (RootVisual is VirtualDataGrid vdg)
-                    {
-                        vdg.ScrollBy(-e.Y);
-                    }
+                    var wheelTarget = RootVisual.HitTest(e.X, e.Y) as VirtualDataGrid ?? FindFirstGrid(RootVisual);
+                    wheelTarget?.ScrollBy(-e.Y);
                     break;
             }
         }
+    }
+
+    private static VirtualDataGrid? FindFirstGrid(VisualNode node)
+    {
+        if (node is VirtualDataGrid grid)
+        {
+            return grid;
+        }
+        if (node is Panel panel)
+        {
+            for (int i = 0; i < panel.Children.Count; i++)
+            {
+                var found = FindFirstGrid(panel.Children[i]);
+                if (found != null)
+                {
+                    return found;
+                }
+            }
+        }
+        return null;
     }
 
     public void PollEvents()

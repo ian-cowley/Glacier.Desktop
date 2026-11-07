@@ -6,13 +6,15 @@
     <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
     <LangVersion>preview</LangVersion>
     <GenerateDocumentationFile>true</GenerateDocumentationFile>
+    <IsAotCompatible>true</IsAotCompatible>
+    <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
     <TieredPGO>true</TieredPGO>
     <ServerGarbageCollection>true</ServerGarbageCollection>
     <NoWarn>$(NoWarn);CS1591;CS8981</NoWarn>
 
     <!-- NuGet Package Properties -->
     <PackageId>Glacier.Desktop</PackageId>
-    <Version>1.0.4</Version>
+    <Version>1.1.0</Version>
     <Authors>Ian Cowley</Authors>
     <Company>Glacier High-Performance Ecosystem</Company>
     <Description>Hardware-accelerated native desktop GUI engine and virtualized data grid for .NET 10 Native AOT. Sub-15ms cold startup, SIMD Kogge-Stone layout calculations, Glacier.Graphics and Glacier.Windowing foundational integration, and 1,000,000+ row virtual grids at 120 FPS.</Description>
@@ -29,9 +31,9 @@
   </ItemGroup>
 
   <ItemGroup>
-    <PackageReference Include="Glacier.Graphics" Version="1.0.2" />
-    <PackageReference Include="Glacier.Windowing" Version="1.0.0" />
-    <PackageReference Include="Glacier.Plot" Version="1.0.5" />
-    <PackageReference Include="Glacier.Polaris" Version="1.0.20" />
+    <PackageReference Include="Glacier.Graphics" Version="1.1.0" />
+    <PackageReference Include="Glacier.Windowing" Version="1.1.0" />
+    <PackageReference Include="Glacier.Plot" Version="1.1.0" />
+    <PackageReference Include="Glacier.Polaris" Version="1.1.0" />
   </ItemGroup>
 </Project>

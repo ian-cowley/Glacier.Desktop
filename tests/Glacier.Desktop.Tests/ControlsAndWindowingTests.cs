@@ -1,6 +1,8 @@
 namespace Glacier.Desktop.Tests;
 
 using System;
+using Glacier.Desktop.Grids;
+using Glacier.Desktop.Interop;
 using Glacier.Desktop.Layout;
 using Glacier.Desktop.UI;
 using Glacier.Desktop.UI.Containers;
@@ -9,6 +11,7 @@ using Glacier.Desktop.Windowing;
 using Glacier.Graphics;
 using Glacier.Graphics.Raster;
 using Glacier.Windowing;
+using Glacier.Windowing.Swapchain.Software;
 using Xunit;
 
 public class ControlsAndWindowingTests
@@ -191,6 +194,80 @@ public class ControlsAndWindowingTests
         Assert.Equal(1, window.FrameCount);
         Assert.Equal(1ul, window.InputDispatchedCount);
         Assert.True(btnClicked);
+    }
+
+    [Fact]
+    public void Win32Window_ConvertRgbaToBgra_SwapsRedAndBlueAcrossSimdAndScalarLanes()
+    {
+        // 19 pixels = 76 bytes (exercises both 16-byte SIMD loop x4 and 3-pixel scalar tail)
+        byte[] rgba = new byte[19 * 4];
+        for (int p = 0; p < 19; p++)
+        {
+            rgba[p * 4 + 0] = (byte)(50 + p);   // R (e.g. GlacierBlue R=50)
+            rgba[p * 4 + 1] = 180;              // G
+            rgba[p * 4 + 2] = (byte)(255 - p);  // B
+            rgba[p * 4 + 3] = 255;              // A
+        }
+
+        byte[] bgra = new byte[rgba.Length];
+        Win32Window.ConvertRgbaToBgra(rgba, bgra);
+
+        for (int p = 0; p < 19; p++)
+        {
+            Assert.Equal((byte)(255 - p), bgra[p * 4 + 0]); // B
+            Assert.Equal(180, bgra[p * 4 + 1]);             // G
+            Assert.Equal((byte)(50 + p), bgra[p * 4 + 2]);  // R
+            Assert.Equal(255, bgra[p * 4 + 3]);             // A
+        }
+    }
+
+    [Fact]
+    public unsafe void GlacierGraphicsRenderer_WithSwapchain_CopiesFramebufferAndPresents()
+    {
+        var desc = new SwapchainDescription { Width = 64, Height = 64, BufferCount = 2 };
+        using var swapchain = new SoftwareSwapchain(desc);
+        using var renderer = new GlacierGraphicsRenderer(64, 64, swapchain);
+
+        var panel = new Panel { BackgroundColor = Color4.GlacierBlue };
+        renderer.BeginFrame();
+        renderer.RenderTree(panel, 64, 64);
+
+        // Capture backbuffer pointer before Present() flips BufferIndex
+        IntPtr targetBackBuffer = swapchain.CurrentBackBuffer;
+        renderer.EndFrame();
+
+        Assert.Equal(1ul, swapchain.PresentCount);
+        var presentedBytes = new ReadOnlySpan<byte>((void*)targetBackBuffer, 4);
+        Assert.Equal(50, presentedBytes[0]);  // R
+        Assert.Equal(180, presentedBytes[1]); // G
+        Assert.Equal(255, presentedBytes[2]); // B
+        Assert.Equal(255, presentedBytes[3]); // A
+    }
+
+    [Fact]
+    public void GlacierWindow_MouseWheel_ScrollsNestedVirtualDataGrid()
+    {
+        using var nativeWin = GlacierDesktopWindowFactory.CreateHeadlessWindow(640, 480);
+        using var window = new GlacierWindow("Nested Scroll Test", 640, 480, nativeWindow: nativeWin);
+
+        var dock = new DockPanel();
+        var grid = new VirtualDataGrid
+        {
+            SourceDataFrame = PolarisGridBridge.CreateSyntheticBenchmarkFrame(1_000)
+        };
+        dock.Add(grid, DockPosition.Fill);
+        window.RootVisual = dock;
+        window.Show();
+
+        Assert.Equal(0f, grid.ScrollOffsetY);
+
+        if (nativeWin is Glacier.Windowing.Platform.Headless.HeadlessWindow hw)
+        {
+            hw.EnqueueInput(new InputEvent(InputEventType.MouseWheel, 0, 100f, -120f, 1000UL));
+        }
+
+        window.Step(0.016f);
+        Assert.True(grid.ScrollOffsetY > 0f);
     }
 }
 

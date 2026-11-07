@@ -1,66 +1,35 @@
 namespace Glacier.Desktop.Windowing;
 
-using System;
-using Glacier.Desktop.Layout;
 using Glacier.Desktop.UI;
 using Glacier.Graphics;
-using Glacier.Graphics.Codecs.Png;
 using Glacier.Graphics.Raster;
 
 /// <summary>
 /// Deterministic headless software window renderer for CI test runners, benchmarks, and snapshot tests.
-/// Pure managed C# .NET 10 execution with zero third-party native binary dependencies.
+/// Delegates directly to <see cref="GlacierGraphicsRenderer"/> for zero-duplication CPU rasterization.
 /// </summary>
 public sealed class HeadlessWindowRenderer : IWindowRenderer
 {
-    private readonly LinearFramebuffer _framebuffer;
-    private readonly CpuGraphicsCanvas _canvas;
-    private bool _disposed;
+    private readonly GlacierGraphicsRenderer _inner;
 
-    public int Width { get; }
-    public int Height { get; }
-    public long RenderedFrameCount { get; private set; }
-    public LinearFramebuffer Framebuffer => _framebuffer;
-    public IGraphicsCanvas Canvas => _canvas;
+    public int Width => _inner.Width;
+    public int Height => _inner.Height;
+    public long RenderedFrameCount => _inner.RenderedFrameCount;
+    public LinearFramebuffer Framebuffer => _inner.Framebuffer;
+    public IGraphicsCanvas Canvas => _inner.Canvas;
 
     public HeadlessWindowRenderer(int width = 1280, int height = 800)
     {
-        Width = width;
-        Height = height;
-        _framebuffer = new LinearFramebuffer(width, height);
-        _canvas = new CpuGraphicsCanvas(_framebuffer);
+        _inner = new GlacierGraphicsRenderer(width, height);
     }
 
-    public void BeginFrame()
-    {
-        _canvas.Clear(Rgba32.Transparent);
-    }
+    public void BeginFrame() => _inner.BeginFrame();
 
-    public void RenderTree(VisualNode root, float width, float height)
-    {
-        root.Measure(width, height);
-        root.Arrange(new LayoutBox(width, height, 0f, 0f));
-        root.Render(_canvas);
-        RenderedFrameCount++;
-    }
+    public void RenderTree(VisualNode root, float width, float height) => _inner.RenderTree(root, width, height);
 
-    public void EndFrame()
-    {
-        _canvas.Flush();
-    }
+    public void EndFrame() => _inner.EndFrame();
 
-    public byte[] EncodeToPng()
-    {
-        return PngEncoder.Encode(_framebuffer);
-    }
+    public byte[] EncodeToPng() => _inner.EncodeToPng();
 
-    public void Dispose()
-    {
-        if (!_disposed)
-        {
-            _canvas.Dispose();
-            _framebuffer.Dispose();
-            _disposed = true;
-        }
-    }
+    public void Dispose() => _inner.Dispose();
 }

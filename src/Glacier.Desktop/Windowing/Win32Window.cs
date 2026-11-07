@@ -3,6 +3,7 @@ namespace Glacier.Desktop.Windowing;
 using System;
 using System.Diagnostics;
 using System.Runtime.InteropServices;
+using System.Runtime.Intrinsics;
 using System.Threading;
 using Glacier.Desktop.Grids;
 using Glacier.Desktop.Layout;
@@ -131,6 +132,12 @@ public sealed unsafe class Win32Window : IDisposable
     [DllImport("user32.dll")]
     private static extern IntPtr SetCursor(IntPtr hCursor);
 
+    [DllImport("user32.dll", SetLastError = true)]
+    private static extern bool DestroyWindow(IntPtr hWnd);
+
+    [DllImport("user32.dll", SetLastError = true)]
+    private static extern bool PostMessageW(IntPtr hWnd, uint msg, IntPtr wParam, IntPtr lParam);
+
     [DllImport("gdi32.dll")]
     private static extern int SetDIBitsToDevice(
         IntPtr hdc, int xDest, int yDest, uint w, uint h,
@@ -156,9 +163,11 @@ public sealed unsafe class Win32Window : IDisposable
 
     private readonly WndProcDelegate _wndProc;
     private readonly GCHandle _wndProcHandle;
+    private readonly int _creatorThreadId;
     private IntPtr _hWnd;
     private readonly LinearFramebuffer _framebuffer;
     private readonly CpuGraphicsCanvas _canvas;
+    private byte* _bgraScratch;
     private BITMAPINFO _bmi;
     private bool _isAlive = true;
     private bool _disposed;
@@ -178,6 +187,14 @@ public sealed unsafe class Win32Window : IDisposable
 
     public Win32Window(string title, int width, int height, VisualNode? rootVisual = null)
     {
+        if (!OperatingSystem.IsWindows())
+        {
+            throw new PlatformNotSupportedException("Win32Window is only supported on Windows.");
+        }
+        ArgumentOutOfRangeException.ThrowIfNegativeOrZero(width);
+        ArgumentOutOfRangeException.ThrowIfNegativeOrZero(height);
+
+        _creatorThreadId = Environment.CurrentManagedThreadId;
         Width = width;
         Height = height;
         RootVisual = rootVisual;
@@ -187,6 +204,9 @@ public sealed unsafe class Win32Window : IDisposable
 
         _framebuffer = new LinearFramebuffer(width, height);
         _canvas = new CpuGraphicsCanvas(_framebuffer);
+        nuint byteSize = checked((nuint)width * (nuint)height * 4u);
+        _bgraScratch = (byte*)NativeMemory.AlignedAlloc(byteSize, 64);
+        NativeMemory.Clear(_bgraScratch, byteSize);
 
         _bmi = new BITMAPINFO
         {
@@ -296,16 +316,65 @@ public sealed unsafe class Win32Window : IDisposable
             IntPtr hdc = GetDC(_hWnd);
             if (hdc != IntPtr.Zero)
             {
-                fixed (byte* pixelPtr = _framebuffer.AsByteSpan())
-                {
-                    SetDIBitsToDevice(
-                        hdc, 0, 0, (uint)Width, (uint)Height,
-                        0, 0, 0, (uint)Height,
-                        (IntPtr)pixelPtr, ref _bmi, 0);
-                }
+                BlitFramebufferToDc(hdc);
                 ReleaseDC(_hWnd, hdc);
             }
         }
+    }
+
+    /// <summary>
+    /// Converts 32-bit RGBA pixels from <see cref="LinearFramebuffer"/> into 32-bit BGRA order required by Win32 GDI <c>BI_RGB</c> bitmaps.
+    /// </summary>
+    public static void ConvertRgbaToBgra(ReadOnlySpan<byte> rgbaSrc, Span<byte> bgraDst)
+    {
+        if (rgbaSrc.Length % 4 != 0)
+        {
+            throw new ArgumentException("Source buffer length must be a multiple of 4 bytes.", nameof(rgbaSrc));
+        }
+        if (bgraDst.Length < rgbaSrc.Length)
+        {
+            throw new ArgumentException("Destination buffer is smaller than source buffer.", nameof(bgraDst));
+        }
+
+        int i = 0;
+        if (Vector128.IsHardwareAccelerated && rgbaSrc.Length >= 16)
+        {
+            Vector128<byte> mask = Vector128.Create(
+                (byte)2, 1, 0, 3, 6, 5, 4, 7, 10, 9, 8, 11, 14, 13, 12, 15);
+
+            for (; i <= rgbaSrc.Length - 16; i += 16)
+            {
+                Vector128<byte> v = Vector128.LoadUnsafe(ref MemoryMarshal.GetReference(rgbaSrc.Slice(i, 16)));
+                Vector128<byte> shuffled = Vector128.Shuffle(v, mask);
+                shuffled.StoreUnsafe(ref MemoryMarshal.GetReference(bgraDst.Slice(i, 16)));
+            }
+        }
+
+        for (; i <= rgbaSrc.Length - 4; i += 4)
+        {
+            byte r = rgbaSrc[i];
+            byte g = rgbaSrc[i + 1];
+            byte b = rgbaSrc[i + 2];
+            byte a = rgbaSrc[i + 3];
+            bgraDst[i] = b;
+            bgraDst[i + 1] = g;
+            bgraDst[i + 2] = r;
+            bgraDst[i + 3] = a;
+        }
+    }
+
+    private void BlitFramebufferToDc(IntPtr hdc)
+    {
+        if (_bgraScratch == null) return;
+
+        ReadOnlySpan<byte> rgba = _framebuffer.AsByteSpan();
+        var bgra = new Span<byte>(_bgraScratch, rgba.Length);
+        ConvertRgbaToBgra(rgba, bgra);
+
+        SetDIBitsToDevice(
+            hdc, 0, 0, (uint)Width, (uint)Height,
+            0, 0, 0, (uint)Height,
+            (IntPtr)_bgraScratch, ref _bmi, 0);
     }
 
     public void RunLoop(Action<float>? onStep = null)
@@ -360,13 +429,7 @@ public sealed unsafe class Win32Window : IDisposable
                 BeginPaint(hWnd, out PAINTSTRUCT ps);
                 if (ps.hdc != IntPtr.Zero)
                 {
-                    fixed (byte* pixelPtr = _framebuffer.AsByteSpan())
-                    {
-                        SetDIBitsToDevice(
-                            ps.hdc, 0, 0, (uint)Width, (uint)Height,
-                            0, 0, 0, (uint)Height,
-                            (IntPtr)pixelPtr, ref _bmi, 0);
-                    }
+                    BlitFramebufferToDc(ps.hdc);
                 }
                 EndPaint(hWnd, ref ps);
                 return IntPtr.Zero;
@@ -567,6 +630,7 @@ public sealed unsafe class Win32Window : IDisposable
                 return IntPtr.Zero;
 
             case WM_DESTROY:
+                _hWnd = IntPtr.Zero;
                 _isAlive = false;
                 PostQuitMessage(0);
                 return IntPtr.Zero;
@@ -581,6 +645,27 @@ public sealed unsafe class Win32Window : IDisposable
         {
             _disposed = true;
             _isAlive = false;
+
+            if (_hWnd != IntPtr.Zero)
+            {
+                IntPtr handle = _hWnd;
+                _hWnd = IntPtr.Zero;
+                if (Environment.CurrentManagedThreadId == _creatorThreadId)
+                {
+                    DestroyWindow(handle);
+                }
+                else
+                {
+                    PostMessageW(handle, 0x0010 /* WM_CLOSE */, IntPtr.Zero, IntPtr.Zero);
+                }
+            }
+
+            if (_bgraScratch != null)
+            {
+                NativeMemory.AlignedFree(_bgraScratch);
+                _bgraScratch = null;
+            }
+
             _canvas.Dispose();
             _framebuffer.Dispose();
             if (_wndProcHandle.IsAllocated) _wndProcHandle.Free();

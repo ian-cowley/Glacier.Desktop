@@ -10,9 +10,9 @@
 [![Website](https://img.shields.io/badge/Website-glaciersoftware.dev-66fcf1.svg)](https://glaciersoftware.dev/)
 [![Buy Me A Coffee](https://img.shields.io/badge/Buy%20Me%20A%20Coffee-Support-orange.svg?logo=buy-me-a-coffee)](https://buymeacoffee.com/glaciersoftware)
 
-> **Hardware-Accelerated Native Desktop GUI Engine for C# .NET 10 (Systematically Beating Python Tkinter & PyQt)**
+> **Native Desktop GUI Engine & Virtualized DataGrid for C# .NET 10 Native AOT**
 
-`Glacier.Desktop` is a modern GPU-accelerated retained-mode desktop application engine built natively for C# .NET 10. Expanding upon the decoupled, out-of-process architecture proven by [`SpanCoder`](https://github.com/ian-cowley/SpanCoder), it delivers sub-15ms Native AOT cold startup, a hardware-accelerated visual tree (DirectX 12 / Vulkan / Metal), SIMD layout calculation passes (`Vector256<float>`), and virtualized data grids rendering 1,000,000+ rows at 120 FPS. It serves as Pillar 9 of the unified **Glacier .NET 10 High-Performance Ecosystem**.
+`Glacier.Desktop` is a retained-mode desktop application engine built natively in 100% pure C# for .NET 10. Expanding upon the decoupled architecture proven by [`Glacier.SpanCoder`](https://github.com/ian-cowley/Glacier.SpanCoder), it delivers sub-15ms Native AOT cold startup, a pure managed `Glacier.Graphics` / `Glacier.Windowing` rendering pipeline, SIMD layout calculation passes (`Vector256<float>`), and virtualized data grids rendering 1,000,000+ rows at 120 FPS.
 
 ---
 
@@ -20,22 +20,21 @@
 
 Desktop GUI development in Python has long suffered from architectural compromises:
 
-1. **Tkinter's Antiquated Architecture**: Tkinter wraps Tcl/Tk from the 1990s. It lacks GPU acceleration, modern vector graphics, high-DPI scaling, and responsive layout primitives. Any heavy CPU calculation on the main thread freezes the entire OS window.
-2. **PyQt / PySide Friction**: While Qt is feature-rich, wrapping C++ Qt in Python creates large binary bundles (120MB+), licensing complexity (GPL/LGPL), and thread-marshaling bottlenecks.
-3. **Electron Bloat**: Developers frequently abandon Python desktop frameworks for Electron, paying a severe penalty of 200MB–500MB RAM usage and slow multi-second launch times.
+1. **Tkinter's Antiquated Architecture**: Tkinter wraps Tcl/Tk from the 1990s. It lacks modern vector graphics, high-DPI scaling, and responsive layout primitives. Any heavy CPU calculation on the main thread freezes the entire OS window.
+2. **PyQt / PySide Friction**: Wrapping C++ Qt in Python creates large binary bundles (120MB+), licensing complexity (GPL/LGPL), and thread-marshaling bottlenecks.
+3. **Electron Bloat**: Electron incurs 200MB–500MB RAM usage and multi-second launch times.
 
-**Glacier.Desktop** builds directly on the battle-tested **`Glacier.SpanCoder`** architecture:
-- **Decoupled Out-of-Process Resiliency**: UI shell and background worker engines communicate over ultra-low-latency binary IPC channels, ensuring the UI thread remains at 120 FPS even under heavy load.
-- **Hardware-Accelerated Visual Tree**: Rendered via DirectX 12, Vulkan, and Metal with sub-pixel text rendering and hardware acrylic/blur materials.
-- **SIMD Layout Engine**: Measures and arranges thousands of layout nodes in **< 1 millisecond** using `Vector256<float>` vectorization.
-- **Sub-15ms Cold Launch**: Native AOT compilation provides instantaneous application startup.
-- **Minimal Footprint**: Operates with a baseline memory footprint of only **~14 MB** (10x smaller than PyQt).
+**Glacier.Desktop** solves these challenges natively on .NET 10:
+- **Zero C++ Wrapper Dependencies**: Pure C# rendering and native Win32/OS windowing via `Glacier.Graphics` and `Glacier.Windowing`.
+- **SIMD Layout Engine**: Measures and arranges thousands of layout nodes in **< 1 millisecond** using `Vector256<float>` Kogge-Stone prefix scans.
+- **Sub-15ms Cold Launch**: Full `<IsAotCompatible>true</IsAotCompatible>` compliance for instantaneous Native AOT startup.
+- **Minimal Footprint**: Operates with a baseline memory footprint of **~14 MB**.
 
 ---
 
 ## 🖼️ Visual Gallery: Real Rendered Desktop Dashboard & Virtual Grid
 
-The figures below are generated directly from the native `Glacier.Desktop.Sample` application running at 470+ FPS with zero garbage collection overhead:
+The figures below are generated directly from the `Glacier.Desktop.Sample` application:
 
 | Enterprise Analytics Dashboard Overview | 1,000,000-Row Virtualized DataGrid |
 | :---: | :---: |
@@ -44,7 +43,7 @@ The figures below are generated directly from the native `Glacier.Desktop.Sample
 
 ---
 
-## 2. Desktop Architecture & Decoupled Process Model
+## 2. Desktop Architecture
 
 ```
                          Glacier.Desktop Architecture
@@ -52,9 +51,9 @@ The figures below are generated directly from the native `Glacier.Desktop.Sample
 │ UI Shell (Windowing, Input Events, Canvas Rendering)   │
 │ - Retained-Mode Visual Tree (VisualNode)               │
 │ - SIMD Layout Pass (Measure / Arrange)                 │
-│ - GPU Backend (Direct3D 12 / Metal / Vulkan via Skia)  │
+│ - Glacier.Graphics + Glacier.Windowing Presentation    │
 └──────────────────────────┬─────────────────────────────┘
-                           │ Low-Latency Binary IPC Channel / Direct Memory Bus
+                           │ Zero-Copy Columnar Spans / Channels
                            ▼
 ┌────────────────────────────────────────────────────────┐
 │ High-Performance Engine Subsystems                     │
@@ -65,7 +64,7 @@ The figures below are generated directly from the native `Glacier.Desktop.Sample
 ```
 
 ### SIMD-Accelerated Layout Engine
-In traditional UI frameworks, layout passes (`Measure` and `Arrange`) recursively traverse object hierarchies on a single thread. `Glacier.Desktop` flattens layout bounds into contiguous primitive arrays (`LayoutBounds[]`), calculating flexbox and grid allocations using SIMD vector instructions:
+`Glacier.Desktop` flattens layout bounds into contiguous primitive structs (`LayoutBox`), calculating flexbox and grid allocations using SIMD vector instructions:
 ```csharp
 [StructLayout(LayoutKind.Sequential, Pack = 1)]
 public struct LayoutBox
@@ -79,66 +78,56 @@ public struct LayoutBox
 
 ---
 
-## 3. Parity & Performance Benchmarking Targets
-
-| Desktop GUI Benchmark | Python Tkinter | Python PyQt6 | Glacier.Desktop (.NET 10 AOT) | Advantage |
-| :--- | :--- | :--- | :--- | :--- |
-| **Cold Window Launch Time** | 420 ms | 680 ms | **14 ms** | **30x–48x faster** |
-| **RAM Footprint (Base Window)** | 75 MB | 140 MB | **14 MB** | **10x smaller** |
-| **Large DataGrid Scroll (1M rows)** | Crashes / Freezes | 24 FPS (Laggy) | **120 FPS (Virtual Span Grid)** | **Smooth 120 FPS** |
-| **Layout Pass (10,000 UI Nodes)** | 180 ms | 45 ms | **0.85 ms (SIMD layout)** | **52x faster** |
-| **Standalone Distribution Size** | ~85 MB (PyInstaller) | ~130 MB | **16 MB (Native AOT)** | **8x smaller** |
-
----
-
-## 4. Quickstart API
+## 3. Quickstart API
 
 ```csharp
-using Glacier.Desktop;
-using Glacier.Desktop.Controls;
-using Glacier.Polaris;
+using Glacier.Desktop.Grids;
+using Glacier.Desktop.Interop;
+using Glacier.Desktop.UI.Containers;
+using Glacier.Desktop.Windowing;
+using Glacier.Plot.Figures;
+using Glacier.Plot.Interop;
 
-public class AnalyticsWindow : DesktopWindow
+// 1. Generate or load a 1,000,000-row Glacier.Polaris columnar DataFrame
+var df = PolarisGridBridge.CreateSyntheticBenchmarkFrame(1_000_000);
+
+// 2. Build a live Glacier.Plot figure
+var figure = new Figure { Title = "Live Telemetry" };
+figure.PlotLine(df.Columns[0], df.Columns[1], label: "Signal");
+
+// 3. Construct the retained-mode visual tree
+var root = new DockPanel();
+root.Add(new PlotCanvas(figure) { Height = 300f }, DockPosition.Bottom);
+root.Add(new VirtualDataGrid { SourceDataFrame = df }, DockPosition.Fill);
+
+// 4. Render headlessly or attach to a native OS window (Win32Window / GlacierWindow)
+using var window = new GlacierWindow("Glacier Analytics Console", 1400, 900)
 {
-    public AnalyticsWindow()
-    {
-        Title = "Glacier Analytics Console";
-        Width = 1400;
-        Height = 900;
-
-        // Load 1M row dataset into virtualized zero-copy data grid
-        var df = DataFrame.ReadParquet("big_data.parquet");
-
-        Content = new DockPanel
-        {
-            Children =
-            {
-                new VirtualizedDataGrid(df).Dock(Dock.Center),
-                new RealTimePlotPanel().Dock(Dock.Bottom, height: 300)
-            }
-        };
-    }
-}
+    RootVisual = root
+};
+window.Show();
+window.Step(1f / 120f);
 ```
 
 ---
 
-## 5. Ecosystem Cross-References
+## 4. Ecosystem Cross-References
 
-`Glacier.Desktop` is designed to seamlessly integrate with the other engines in the **Glacier .NET 10 High-Performance Ecosystem**:
-
-- **[Master Architecture Plan](../../GLACIER_ECOSYSTEM_MASTER_PLAN.md)**: Ecosystem blueprint mapping the 9 Python domains to .NET 10 counterparts.
-- **[Glacier.Desktop Technical Specification](../../docs/plans/09_GLACIER_DESKTOP_SPEC.md)**: Deep dive into out-of-process architecture, SIMD layout, and GPU rendering.
-- **[SpanCoder](https://github.com/ian-cowley/SpanCoder)**: The foundational IDE architecture and decoupled Avalonia engine inspiring Glacier.Desktop.
-- **[Glacier.Plot](https://github.com/ian-cowley/Glacier.Plot)**: High-speed charting controls integrated directly into desktop windows.
-- **[Glacier.Polaris](https://github.com/ian-cowley/Glacier.Polaris)**: Arrow columnar memory powering virtualized 120 FPS data grids.
+- **[Glacier Ecosystem Website](https://glaciersoftware.dev/)**: Unified .NET 10 high-performance architecture overview.
+- **[Glacier.SpanCoder](https://github.com/ian-cowley/Glacier.SpanCoder)**: Out-of-process IDE and developer tooling suite.
+- **[Glacier.Graphics](https://github.com/ian-cowley/Glacier.Graphics)**: Pure C# 2D vector, text, and raster engine.
+- **[Glacier.Windowing](https://github.com/ian-cowley/Glacier.Windowing)**: Native OS windowing, swapchains, input, and low-latency audio.
+- **[Glacier.Plot](https://github.com/ian-cowley/Glacier.Plot)**: High-speed scientific charting controls integrated into `PlotCanvas`.
+- **[Glacier.Polaris](https://github.com/ian-cowley/Glacier.Polaris)**: Columnar DataFrame engine powering 120 FPS `VirtualDataGrid` views.
 
 ---
 
-## 🆕 What's New in v1.0.1
+## 🆕 What's New in v1.1.0
 
-- **Direct `Span<char>` cell formatting in `VirtualDataGrid`** — column values are formatted directly into a stack-allocated char span with zero string allocations, sustaining 120 FPS across 1M-row datasets.
-- **16 tests** passing (100 %).
+- **SIMD RGBA-to-BGRA Win32 GDI Presentation** — `Win32Window` converts `LinearFramebuffer` RGBA scanlines to Win32 `BI_RGB` BGRA order via `Vector128.Shuffle` (`PSHUFB` / `TBL`), eliminating red/blue channel inversion on Windows GDI blits and properly releasing native `HWND` handles on disposal.
+- **Swapchain-Backed `GlacierGraphicsRenderer` & Unified `HeadlessWindowRenderer`** — `GlacierGraphicsRenderer` supports direct `ISwapchain` backbuffer presentation, while `HeadlessWindowRenderer` delegates to `GlacierGraphicsRenderer` with zero duplicate rendering logic.
+- **Nested `VirtualDataGrid` Mouse-Wheel Routing** — `GlacierWindow` routes native wheel events via hit-testing and container traversal.
+- **Upgraded to `Glacier.Graphics 1.1.0`, `Glacier.Windowing 1.1.0`, `Glacier.Plot 1.1.0`, and `Glacier.Polaris 1.1.0`** with full `<IsAotCompatible>true</IsAotCompatible>` and zero transitive vulnerabilities.
 
 ---
 
