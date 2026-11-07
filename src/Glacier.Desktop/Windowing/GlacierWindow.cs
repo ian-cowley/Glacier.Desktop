@@ -6,7 +6,6 @@ using Glacier.Desktop.UI;
 using Glacier.Desktop.UI.Containers;
 using Glacier.Desktop.UI.Controls;
 using Glacier.Desktop.Grids;
-using Glacier.Windowing;
 
 /// <summary>
 /// Native desktop window orchestrator managing the visual tree, layout calculations, and GPU frames.

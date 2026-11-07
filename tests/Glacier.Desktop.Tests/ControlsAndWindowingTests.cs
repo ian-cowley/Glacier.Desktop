@@ -8,10 +8,9 @@ using Glacier.Desktop.UI;
 using Glacier.Desktop.UI.Containers;
 using Glacier.Desktop.UI.Controls;
 using Glacier.Desktop.Windowing;
+using Glacier.Desktop.Windowing.Swapchain.Software;
 using Glacier.Graphics;
 using Glacier.Graphics.Raster;
-using Glacier.Windowing;
-using Glacier.Windowing.Swapchain.Software;
 using Xunit;
 
 public class ControlsAndWindowingTests
@@ -182,7 +181,7 @@ public class ControlsAndWindowingTests
 
         // Native hardware input received directly without OS polling jitter
         var inputEvt = new InputEvent(InputEventType.MouseDown, 1, 20f, 20f, 1000000UL);
-        if (nativeWin is Glacier.Windowing.Platform.Headless.HeadlessWindow hw)
+        if (nativeWin is Glacier.Desktop.Windowing.Platform.Headless.HeadlessWindow hw)
         {
             hw.EnqueueInput(inputEvt);
         }
@@ -261,7 +260,7 @@ public class ControlsAndWindowingTests
 
         Assert.Equal(0f, grid.ScrollOffsetY);
 
-        if (nativeWin is Glacier.Windowing.Platform.Headless.HeadlessWindow hw)
+        if (nativeWin is Glacier.Desktop.Windowing.Platform.Headless.HeadlessWindow hw)
         {
             hw.EnqueueInput(new InputEvent(InputEventType.MouseWheel, 0, 100f, -120f, 1000UL));
         }
