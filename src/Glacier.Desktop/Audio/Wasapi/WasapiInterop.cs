@@ -65,10 +65,13 @@ internal static unsafe partial class WasapiInterop
         out IntPtr ppv);
 
     public static bool TryAcquireDefaultRenderEndpoint(out IntPtr mmDevice)
+        => TryAcquireDefaultRenderEndpoint(out mmDevice, out _);
+
+    public static bool TryAcquireDefaultRenderEndpoint(out IntPtr mmDevice, out bool mustUninit)
     {
         mmDevice = IntPtr.Zero;
         int hrCoInit = CoInitializeEx(IntPtr.Zero, COINIT_MULTITHREADED);
-        bool mustUninit = hrCoInit is 0 or 1; // S_OK or S_FALSE
+        mustUninit = hrCoInit is 0 or 1; // S_OK or S_FALSE
 
         try
         {

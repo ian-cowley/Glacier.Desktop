@@ -27,12 +27,15 @@ public sealed unsafe class WasapiAudioStream : IAudioStream
             {
                 return false;
             }
-            if (!WasapiInterop.TryAcquireDefaultRenderEndpoint(out IntPtr endpoint))
+            if (!WasapiInterop.TryAcquireDefaultRenderEndpoint(out IntPtr endpoint, out bool mustUninit))
             {
                 return false;
             }
             Marshal.Release(endpoint);
-            WasapiInterop.CoUninitialize();
+            if (mustUninit)
+            {
+                WasapiInterop.CoUninitialize();
+            }
             return true;
         }
     }
@@ -56,12 +59,15 @@ public sealed unsafe class WasapiAudioStream : IAudioStream
         ArgumentOutOfRangeException.ThrowIfNegativeOrZero(sampleRate);
         ArgumentOutOfRangeException.ThrowIfNegativeOrZero(channels);
 
-        if (!WasapiInterop.TryAcquireDefaultRenderEndpoint(out IntPtr probeEndpoint))
+        if (!WasapiInterop.TryAcquireDefaultRenderEndpoint(out IntPtr probeEndpoint, out bool mustUninit))
         {
             throw new InvalidOperationException("No active WASAPI audio render endpoint is available on this Windows host.");
         }
         Marshal.Release(probeEndpoint);
-        WasapiInterop.CoUninitialize();
+        if (mustUninit)
+        {
+            WasapiInterop.CoUninitialize();
+        }
 
         _sampleRate = sampleRate;
         _channels = channels;

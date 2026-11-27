@@ -16,16 +16,19 @@ public sealed class SpscAudioRingBuffer
     private readonly int _mask;
     private readonly int _capacity;
 
-    // Cache-line isolation: Head and Tail live on distinct 128-byte cache lines.
+    // Cache-line isolation: Head and Tail (with private shadow remote cursors) live on distinct 128-byte cache lines.
     [StructLayout(LayoutKind.Explicit, Size = 128)]
-    private struct PaddedLong
+    private struct PaddedCursor
     {
         [FieldOffset(0)]
         public long Value;
+
+        [FieldOffset(8)]
+        public long CachedRemote;
     }
 
-    private PaddedLong _tail; // Written by Producer
-    private PaddedLong _head; // Written by Consumer
+    private PaddedCursor _tail; // Written by Producer; CachedRemote caches _head.Value
+    private PaddedCursor _head; // Written by Consumer; CachedRemote caches _tail.Value
 
     /// <summary>
     /// Gets the total capacity in float samples (always a power of two).
@@ -83,7 +86,14 @@ public sealed class SpscAudioRingBuffer
     public bool TryWrite(ReadOnlySpan<float> samples)
     {
         if (samples.IsEmpty) return true;
-        if (samples.Length > AvailableWrite) return false;
+        long tail = _tail.Value;
+        int cachedAvail = _capacity - (int)(tail - _tail.CachedRemote);
+        if (samples.Length > cachedAvail)
+        {
+            _tail.CachedRemote = Volatile.Read(ref _head.Value);
+            cachedAvail = _capacity - (int)(tail - _tail.CachedRemote);
+            if (samples.Length > cachedAvail) return false;
+        }
 
         WriteUnchecked(samples);
         return true;
@@ -98,7 +108,15 @@ public sealed class SpscAudioRingBuffer
     {
         if (samples.IsEmpty) return 0;
 
-        int toWrite = Math.Min(samples.Length, AvailableWrite);
+        long tail = _tail.Value;
+        int avail = _capacity - (int)(tail - _tail.CachedRemote);
+        if (samples.Length > avail)
+        {
+            _tail.CachedRemote = Volatile.Read(ref _head.Value);
+            avail = _capacity - (int)(tail - _tail.CachedRemote);
+        }
+
+        int toWrite = Math.Min(samples.Length, avail);
         if (toWrite <= 0) return 0;
 
         WriteUnchecked(samples[..toWrite]);
@@ -131,11 +149,17 @@ public sealed class SpscAudioRingBuffer
     {
         if (destination.IsEmpty) return 0;
 
-        int available = AvailableRead;
+        long head = _head.Value;
+        int available = (int)(_head.CachedRemote - head);
+        if (destination.Length > available)
+        {
+            _head.CachedRemote = Volatile.Read(ref _tail.Value);
+            available = (int)(_head.CachedRemote - head);
+        }
+
         int toRead = Math.Min(destination.Length, available);
         if (toRead <= 0) return 0;
 
-        long head = _head.Value;
         int startIndex = (int)(head & _mask);
         int chunk1 = Math.Min(toRead, _capacity - startIndex);
         int chunk2 = toRead - chunk1;
@@ -156,6 +180,7 @@ public sealed class SpscAudioRingBuffer
     public void Clear()
     {
         long currentTail = Volatile.Read(ref _tail.Value);
+        _head.CachedRemote = currentTail;
         Volatile.Write(ref _head.Value, currentTail);
     }
 }

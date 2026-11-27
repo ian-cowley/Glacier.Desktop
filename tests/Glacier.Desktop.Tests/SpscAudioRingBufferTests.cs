@@ -182,4 +182,22 @@ public class SpscAudioRingBufferTests
         Assert.Equal(totalSamples, consumerReadCount);
         Assert.True(consumerSum > 0);
     }
+
+    [Fact]
+    public void WriteAndRead_MultipleWraparounds_PreserveShadowCursorSync()
+    {
+        var rb = new SpscAudioRingBuffer(64);
+        float[] src = new float[48];
+        float[] dst = new float[48];
+        for (int iter = 0; iter < 50; iter++)
+        {
+            for (int i = 0; i < src.Length; i++) src[i] = iter * 100f + i;
+            Assert.Equal(src.Length, rb.Write(src));
+            Assert.Equal(dst.Length, rb.Read(dst));
+            Assert.Equal(src, dst);
+        }
+        rb.Clear();
+        Assert.Equal(0, rb.AvailableRead);
+        Assert.Equal(rb.Capacity, rb.AvailableWrite);
+    }
 }
