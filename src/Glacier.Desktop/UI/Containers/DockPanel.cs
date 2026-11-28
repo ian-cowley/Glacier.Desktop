@@ -27,6 +27,18 @@ public class DockPanel : Panel
         base.Add(child);
     }
 
+    public override bool Remove(VisualNode child)
+    {
+        _dockPositions.Remove(child);
+        return base.Remove(child);
+    }
+
+    public override void Clear()
+    {
+        _dockPositions.Clear();
+        base.Clear();
+    }
+
     public override void Arrange(in LayoutBox finalBounds)
     {
         Bounds.ActualX = finalBounds.ActualX + Margin.Left;
@@ -36,8 +48,8 @@ public class DockPanel : Panel
 
         float curLeft = Bounds.ActualX + Padding.Left;
         float curTop = Bounds.ActualY + Padding.Top;
-        float curRight = Bounds.ActualX + Bounds.DesiredWidth - Padding.Right;
-        float curBottom = Bounds.ActualY + Bounds.DesiredHeight - Padding.Bottom;
+        float curRight = MathF.Max(curLeft, Bounds.ActualX + Bounds.DesiredWidth - Padding.Right);
+        float curBottom = MathF.Max(curTop, Bounds.ActualY + Bounds.DesiredHeight - Padding.Bottom);
 
         for (int i = 0; i < _children.Count; i++)
         {
@@ -45,33 +57,45 @@ public class DockPanel : Panel
             if (!child.IsVisible) continue;
 
             DockPosition dock = _dockPositions.GetValueOrDefault(child, DockPosition.Fill);
+            float availW = MathF.Max(0f, curRight - curLeft);
+            float availH = MathF.Max(0f, curBottom - curTop);
 
             switch (dock)
             {
                 case DockPosition.Top:
-                    child.Arrange(new LayoutBox(curRight - curLeft, child.Bounds.DesiredHeight, curLeft, curTop));
-                    curTop += child.Bounds.DesiredHeight;
+                {
+                    float h = Math.Clamp(child.Bounds.DesiredHeight, 0f, availH);
+                    child.Arrange(new LayoutBox(availW, h, curLeft, curTop));
+                    curTop = MathF.Min(curBottom, curTop + h);
                     break;
+                }
 
                 case DockPosition.Bottom:
-                    float h = child.Bounds.DesiredHeight;
-                    child.Arrange(new LayoutBox(curRight - curLeft, h, curLeft, curBottom - h));
-                    curBottom -= h;
+                {
+                    float h = Math.Clamp(child.Bounds.DesiredHeight, 0f, availH);
+                    child.Arrange(new LayoutBox(availW, h, curLeft, curBottom - h));
+                    curBottom = MathF.Max(curTop, curBottom - h);
                     break;
+                }
 
                 case DockPosition.Left:
-                    child.Arrange(new LayoutBox(child.Bounds.DesiredWidth, curBottom - curTop, curLeft, curTop));
-                    curLeft += child.Bounds.DesiredWidth;
+                {
+                    float w = Math.Clamp(child.Bounds.DesiredWidth, 0f, availW);
+                    child.Arrange(new LayoutBox(w, availH, curLeft, curTop));
+                    curLeft = MathF.Min(curRight, curLeft + w);
                     break;
+                }
 
                 case DockPosition.Right:
-                    float w = child.Bounds.DesiredWidth;
-                    child.Arrange(new LayoutBox(w, curBottom - curTop, curRight - w, curTop));
-                    curRight -= w;
+                {
+                    float w = Math.Clamp(child.Bounds.DesiredWidth, 0f, availW);
+                    child.Arrange(new LayoutBox(w, availH, curRight - w, curTop));
+                    curRight = MathF.Max(curLeft, curRight - w);
                     break;
+                }
 
                 case DockPosition.Fill:
-                    child.Arrange(new LayoutBox(MathF.Max(0f, curRight - curLeft), MathF.Max(0f, curBottom - curTop), curLeft, curTop));
+                    child.Arrange(new LayoutBox(availW, availH, curLeft, curTop));
                     break;
             }
         }

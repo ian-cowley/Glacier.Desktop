@@ -1,6 +1,7 @@
 namespace Glacier.Desktop.UI.Containers;
 
 using System;
+using System.Buffers;
 using Glacier.Desktop.Layout;
 using Glacier.Desktop.UI;
 
@@ -20,6 +21,7 @@ public class FlexRow : Panel
     {
         float totalW = 0f;
         float maxH = 0f;
+        int visibleCount = 0;
 
         for (int i = 0; i < _children.Count; i++)
         {
@@ -27,8 +29,10 @@ public class FlexRow : Panel
             if (!child.IsVisible) continue;
 
             child.Measure(availableWidth, availableHeight);
-            totalW += child.Bounds.DesiredWidth + (i > 0 ? Spacing : 0f);
+            if (visibleCount > 0) totalW += Spacing;
+            totalW += child.Bounds.DesiredWidth;
             maxH = MathF.Max(maxH, child.Bounds.DesiredHeight);
+            visibleCount++;
         }
 
         Bounds.DesiredWidth = !float.IsNaN(Width) && Width > 0 ? Width : totalW + Padding.Horizontal;
@@ -42,27 +46,51 @@ public class FlexRow : Panel
         Bounds.DesiredWidth = !float.IsNaN(_explicitWidth) && _explicitWidth > 0 ? _explicitWidth : finalBounds.DesiredWidth;
         Bounds.DesiredHeight = !float.IsNaN(_explicitHeight) && _explicitHeight > 0 ? _explicitHeight : finalBounds.DesiredHeight;
 
-        int count = _children.Count;
-        if (count == 0) return;
-
-        // Use high-performance SoA layout arrange buffers
-        Span<float> widths = stackalloc float[count];
-        Span<float> actualXs = stackalloc float[count];
-        for (int i = 0; i < count; i++)
+        int visibleCount = 0;
+        for (int i = 0; i < _children.Count; i++)
         {
-            widths[i] = _children[i].Bounds.DesiredWidth;
+            if (_children[i].IsVisible) visibleCount++;
         }
+        if (visibleCount == 0) return;
 
-        float startX = Bounds.ActualX + Padding.Left;
-        LayoutKernels.ArrangeHorizontalRowSoA(widths, actualXs, startX, Spacing);
-
-        float curY = Bounds.ActualY + Padding.Top;
-        for (int i = 0; i < count; i++)
+        float[]? rentedWidths = null;
+        float[]? rentedActualXs = null;
+        try
         {
-            var b = _children[i].Bounds;
-            b.ActualX = actualXs[i];
-            b.ActualY = curY;
-            _children[i].Arrange(b);
+            Span<float> widths = visibleCount <= 128
+                ? stackalloc float[visibleCount]
+                : (rentedWidths = ArrayPool<float>.Shared.Rent(visibleCount)).AsSpan(0, visibleCount);
+            Span<float> actualXs = visibleCount <= 128
+                ? stackalloc float[visibleCount]
+                : (rentedActualXs = ArrayPool<float>.Shared.Rent(visibleCount)).AsSpan(0, visibleCount);
+
+            int vIdx = 0;
+            for (int i = 0; i < _children.Count; i++)
+            {
+                var child = _children[i];
+                if (!child.IsVisible) continue;
+                widths[vIdx++] = child.Bounds.DesiredWidth;
+            }
+
+            float startX = Bounds.ActualX + Padding.Left;
+            LayoutKernels.ArrangeHorizontalRowSoA(widths, actualXs, startX, Spacing);
+
+            float curY = Bounds.ActualY + Padding.Top;
+            vIdx = 0;
+            for (int i = 0; i < _children.Count; i++)
+            {
+                var child = _children[i];
+                if (!child.IsVisible) continue;
+                var b = child.Bounds;
+                b.ActualX = actualXs[vIdx++];
+                b.ActualY = curY;
+                child.Arrange(b);
+            }
+        }
+        finally
+        {
+            if (rentedWidths is not null) ArrayPool<float>.Shared.Return(rentedWidths);
+            if (rentedActualXs is not null) ArrayPool<float>.Shared.Return(rentedActualXs);
         }
     }
 }

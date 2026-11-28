@@ -194,12 +194,15 @@ public sealed unsafe class D3D12Swapchain : ISwapchain
 
     private void FreeBuffers()
     {
-        for (int i = 0; i < _backBuffers.Length; i++)
+        if (_backBuffers != null)
         {
-            if (_backBuffers[i] != IntPtr.Zero)
+            for (int i = 0; i < _backBuffers.Length; i++)
             {
-                NativeMemory.AlignedFree((void*)_backBuffers[i]);
-                _backBuffers[i] = IntPtr.Zero;
+                if (_backBuffers[i] != IntPtr.Zero)
+                {
+                    NativeMemory.AlignedFree((void*)_backBuffers[i]);
+                    _backBuffers[i] = IntPtr.Zero;
+                }
             }
         }
 
@@ -209,6 +212,8 @@ public sealed unsafe class D3D12Swapchain : ISwapchain
             _bgraScratch = IntPtr.Zero;
         }
     }
+
+    ~D3D12Swapchain() => Dispose();
 
     public void Dispose()
     {

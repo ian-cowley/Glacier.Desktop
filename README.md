@@ -12,7 +12,7 @@
 
 > **Native Desktop GUI Engine & Virtualized DataGrid for C# .NET 10 Native AOT**
 
-`Glacier.Desktop` is a retained-mode desktop application engine built natively in 100% pure C# for .NET 10. Expanding upon the decoupled architecture proven by [`Glacier.SpanCoder`](https://github.com/ian-cowley/Glacier.SpanCoder), it delivers sub-15ms Native AOT cold startup, a pure managed `Glacier.Graphics` / `Glacier.Windowing` rendering pipeline, SIMD layout calculation passes (`Vector256<float>`), and virtualized data grids rendering 1,000,000+ rows at 120 FPS.
+`Glacier.Desktop` is a retained-mode desktop application engine built natively in 100% pure C# for .NET 10. Expanding upon the decoupled architecture proven by [`Glacier.SpanCoder`](https://github.com/ian-cowley/Glacier.SpanCoder), it delivers sub-15ms Native AOT cold startup, a pure managed `Glacier.Graphics` + integrated native windowing HAL rendering pipeline, SIMD layout calculation passes (`Vector512<float>` / `Vector256<float>`), and virtualized data grids rendering 1,000,000+ rows at 120 FPS.
 
 ---
 
@@ -25,7 +25,7 @@ Desktop GUI development in Python has long suffered from architectural compromis
 3. **Electron Bloat**: Electron incurs 200MB–500MB RAM usage and multi-second launch times.
 
 **Glacier.Desktop** solves these challenges natively on .NET 10:
-- **Zero C++ Wrapper Dependencies**: Pure C# rendering and native Win32/OS windowing via `Glacier.Graphics` and `Glacier.Windowing`.
+- **Zero C++ Wrapper Dependencies**: Pure C# rendering and native Win32/OS windowing via `Glacier.Graphics` and `Glacier.Desktop`'s integrated windowing HAL.
 - **SIMD Layout Engine**: Measures and arranges thousands of layout nodes in **< 1 millisecond** using `Vector256<float>` Kogge-Stone prefix scans.
 - **Sub-15ms Cold Launch**: Full `<IsAotCompatible>true</IsAotCompatible>` compliance for instantaneous Native AOT startup.
 - **Minimal Footprint**: Operates with a baseline memory footprint of **~14 MB**.
@@ -51,7 +51,7 @@ The figures below are generated directly from the `Glacier.Desktop.Sample` appli
 │ UI Shell (Windowing, Input Events, Canvas Rendering)   │
 │ - Retained-Mode Visual Tree (VisualNode)               │
 │ - SIMD Layout Pass (Measure / Arrange)                 │
-│ - Glacier.Graphics + Glacier.Windowing Presentation    │
+│ - Glacier.Graphics + Integrated Windowing Presentation    │
 └──────────────────────────┬─────────────────────────────┘
                            │ Zero-Copy Columnar Spans / Channels
                            ▼
@@ -116,7 +116,7 @@ window.Step(1f / 120f);
 - **[Glacier Ecosystem Website](https://glaciersoftware.dev/)**: Unified .NET 10 high-performance architecture overview.
 - **[Glacier.SpanCoder](https://github.com/ian-cowley/Glacier.SpanCoder)**: Out-of-process IDE and developer tooling suite.
 - **[Glacier.Graphics](https://github.com/ian-cowley/Glacier.Graphics)**: Pure C# 2D vector, text, and raster engine.
-- **[Glacier.Windowing](https://github.com/ian-cowley/Glacier.Windowing)**: Native OS windowing, swapchains, input, and low-latency audio.
+- **Integrated Windowing & Audio HAL**: Native Win32/OS windowing, D3D12/Vulkan/Software swapchains, input routing, and sub-3ms audio built directly into `Glacier.Desktop`.
 - **[Glacier.Plot](https://github.com/ian-cowley/Glacier.Plot)**: High-speed scientific charting controls integrated into `PlotCanvas`.
 - **[Glacier.Polaris](https://github.com/ian-cowley/Glacier.Polaris)**: Columnar DataFrame engine powering 120 FPS `VirtualDataGrid` views.
 
@@ -127,7 +127,7 @@ window.Step(1f / 120f);
 - **SIMD RGBA-to-BGRA Win32 GDI Presentation** — `Win32Window` converts `LinearFramebuffer` RGBA scanlines to Win32 `BI_RGB` BGRA order via `Vector128.Shuffle` (`PSHUFB` / `TBL`), eliminating red/blue channel inversion on Windows GDI blits and properly releasing native `HWND` handles on disposal.
 - **Swapchain-Backed `GlacierGraphicsRenderer` & Unified `HeadlessWindowRenderer`** — `GlacierGraphicsRenderer` supports direct `ISwapchain` backbuffer presentation, while `HeadlessWindowRenderer` delegates to `GlacierGraphicsRenderer` with zero duplicate rendering logic.
 - **Nested `VirtualDataGrid` Mouse-Wheel Routing** — `GlacierWindow` routes native wheel events via hit-testing and container traversal.
-- **Upgraded to `Glacier.Graphics 1.1.0`, `Glacier.Windowing 1.1.0`, `Glacier.Plot 1.1.0`, and `Glacier.Polaris 1.1.0`** with full `<IsAotCompatible>true</IsAotCompatible>` and zero transitive vulnerabilities.
+- **Upgraded to `Glacier.Graphics 1.2.x`, `Glacier.Plot 1.2.x`, and `Glacier.Polaris 1.2.x`** with full `<IsAotCompatible>true</IsAotCompatible>` and zero transitive vulnerabilities.
 
 ---
 

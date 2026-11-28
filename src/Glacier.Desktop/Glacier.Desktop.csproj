@@ -14,8 +14,8 @@
 
     <!-- NuGet Package Properties -->
     <PackageId>Glacier.Desktop</PackageId>
-    <Version>1.2.1</Version>
-    <PackageReleaseNotes>v1.2.1: 128B cache-line isolated shadow cursors in SpscAudioRingBuffer and aligned Graphics/Plot/Polaris dependencies.</PackageReleaseNotes>
+    <Version>1.2.2</Version>
+    <PackageReleaseNotes>v1.2.2: Bounded stackalloc &amp; invisible-child spacing fixes in FlexRow/FlexColumn, SIMD FlexColumn arrange, DockPanel clamping, swapchain finalizers, and aligned Graphics/Plot dependencies.</PackageReleaseNotes>
     <Authors>Ian Cowley</Authors>
     <Company>Glacier High-Performance Ecosystem</Company>
     <Description>Hardware-accelerated native desktop GUI engine, cross-platform windowing/audio HAL, and virtualized data grid for .NET 10 Native AOT. Sub-15ms cold startup, SIMD Kogge-Stone layout calculations, Glacier.Graphics integration, and 1,000,000+ row virtual grids at 120 FPS.</Description>

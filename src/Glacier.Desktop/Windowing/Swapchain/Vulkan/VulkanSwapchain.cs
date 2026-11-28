@@ -93,7 +93,7 @@ public sealed unsafe class VulkanSwapchain : ISwapchain
         var vkCreateInstance = (delegate* unmanaged[Cdecl]<VulkanInterop.VkInstanceCreateInfo*, IntPtr, out IntPtr, int>)createFn;
         _vkDestroyInstance = (delegate* unmanaged[Cdecl]<IntPtr, IntPtr, void>)destroyFn;
 
-        ReadOnlySpan<byte> appName = "Glacier.Windowing\0"u8;
+        ReadOnlySpan<byte> appName = "Glacier.Desktop\0"u8;
         fixed (byte* pAppName = appName)
         {
             VulkanInterop.VkApplicationInfo appInfo = new()
@@ -175,17 +175,22 @@ public sealed unsafe class VulkanSwapchain : ISwapchain
         _currentImageIndex = 0;
     }
 
+    ~VulkanSwapchain() => Dispose();
+
     public void Dispose()
     {
         if (_disposed) return;
         _disposed = true;
 
-        for (int i = 0; i < _swapchainImages.Length; i++)
+        if (_swapchainImages != null)
         {
-            if (_swapchainImages[i] != IntPtr.Zero)
+            for (int i = 0; i < _swapchainImages.Length; i++)
             {
-                NativeMemory.AlignedFree((void*)_swapchainImages[i]);
-                _swapchainImages[i] = IntPtr.Zero;
+                if (_swapchainImages[i] != IntPtr.Zero)
+                {
+                    NativeMemory.AlignedFree((void*)_swapchainImages[i]);
+                    _swapchainImages[i] = IntPtr.Zero;
+                }
             }
         }
 

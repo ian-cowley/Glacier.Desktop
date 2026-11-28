@@ -21,7 +21,7 @@ public class Panel : VisualNode, IEnumerable<VisualNode>
         _children.Add(child);
     }
 
-    public bool Remove(VisualNode child)
+    public virtual bool Remove(VisualNode child)
     {
         if (_children.Remove(child))
         {
@@ -31,7 +31,7 @@ public class Panel : VisualNode, IEnumerable<VisualNode>
         return false;
     }
 
-    public void Clear()
+    public virtual void Clear()
     {
         foreach (var c in _children) c.Parent = null;
         _children.Clear();
