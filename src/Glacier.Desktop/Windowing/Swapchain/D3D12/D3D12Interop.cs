@@ -10,8 +10,8 @@ internal static unsafe partial class D3D12Interop
     public const uint D3D_FEATURE_LEVEL_11_0 = 0xb000;
     public const uint D3D_FEATURE_LEVEL_12_0 = 0xc000;
 
-    [DllImport(D3D12Dll, ExactSpelling = true)]
-    public static extern int D3D12CreateDevice(
+    [LibraryImport(D3D12Dll)]
+    public static partial int D3D12CreateDevice(
         IntPtr pAdapter,
         uint MinimumFeatureLevel,
         in Guid riid,

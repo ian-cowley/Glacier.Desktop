@@ -36,26 +36,26 @@ internal static unsafe partial class LibObjC
         NativeLibrary.TryLoad(QuartzCoreFramework, out _);
     }
 
-    [DllImport(DllName, CharSet = CharSet.Ansi)]
-    public static extern IntPtr objc_getClass(string name);
+    [LibraryImport(DllName, StringMarshalling = StringMarshalling.Utf8)]
+    public static partial IntPtr objc_getClass(string name);
 
-    [DllImport(DllName, CharSet = CharSet.Ansi)]
-    public static extern IntPtr sel_registerName(string name);
+    [LibraryImport(DllName, StringMarshalling = StringMarshalling.Utf8)]
+    public static partial IntPtr sel_registerName(string name);
 
-    [DllImport(DllName, EntryPoint = "objc_msgSend")]
-    public static extern IntPtr objc_msgSend(IntPtr self, IntPtr op);
+    [LibraryImport(DllName, EntryPoint = "objc_msgSend")]
+    public static partial IntPtr objc_msgSend(IntPtr self, IntPtr op);
 
-    [DllImport(DllName, EntryPoint = "objc_msgSend")]
-    public static extern IntPtr objc_msgSend(IntPtr self, IntPtr op, IntPtr arg1);
+    [LibraryImport(DllName, EntryPoint = "objc_msgSend")]
+    public static partial IntPtr objc_msgSend(IntPtr self, IntPtr op, IntPtr arg1);
 
-    [DllImport(DllName, EntryPoint = "objc_msgSend")]
-    public static extern IntPtr objc_msgSend(IntPtr self, IntPtr op, nuint arg1);
+    [LibraryImport(DllName, EntryPoint = "objc_msgSend")]
+    public static partial IntPtr objc_msgSend(IntPtr self, IntPtr op, nuint arg1);
 
-    [DllImport(DllName, EntryPoint = "objc_msgSend")]
-    public static extern void objc_msgSend_CGSize(IntPtr self, IntPtr op, CGSize size);
+    [LibraryImport(DllName, EntryPoint = "objc_msgSend")]
+    public static partial void objc_msgSend_CGSize(IntPtr self, IntPtr op, CGSize size);
 
-    [DllImport(DllName, EntryPoint = "objc_msgSend")]
-    public static extern IntPtr objc_msgSend_InitWindow(
+    [LibraryImport(DllName, EntryPoint = "objc_msgSend")]
+    public static partial IntPtr objc_msgSend_InitWindow(
         IntPtr self,
         IntPtr op,
         NSRect contentRect,
@@ -63,6 +63,6 @@ internal static unsafe partial class LibObjC
         nuint backing,
         byte defer);
 
-    [DllImport(DllName, EntryPoint = "objc_msgSend")]
-    public static extern IntPtr objc_msgSend(IntPtr self, IntPtr op, byte arg1);
+    [LibraryImport(DllName, EntryPoint = "objc_msgSend")]
+    public static partial IntPtr objc_msgSend(IntPtr self, IntPtr op, byte arg1);
 }

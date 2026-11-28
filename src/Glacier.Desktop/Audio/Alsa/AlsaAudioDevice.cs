@@ -13,17 +13,17 @@ internal static unsafe partial class LibAsound
     public const int SND_PCM_FORMAT_FLOAT_LE = 14;
     public const int SND_PCM_ACCESS_RW_INTERLEAVED = 3;
 
-    [DllImport(AsoundDll)]
-    public static extern int snd_pcm_open(out IntPtr pcm, string name, int stream, int mode);
+    [LibraryImport(AsoundDll, StringMarshalling = StringMarshalling.Utf8)]
+    public static partial int snd_pcm_open(out IntPtr pcm, string name, int stream, int mode);
 
-    [DllImport(AsoundDll)]
-    public static extern int snd_pcm_close(IntPtr pcm);
+    [LibraryImport(AsoundDll)]
+    public static partial int snd_pcm_close(IntPtr pcm);
 
-    [DllImport(AsoundDll)]
-    public static extern int snd_pcm_recover(IntPtr pcm, int err, int silent);
+    [LibraryImport(AsoundDll)]
+    public static partial int snd_pcm_recover(IntPtr pcm, int err, int silent);
 
-    [DllImport(AsoundDll)]
-    public static extern int snd_pcm_set_params(
+    [LibraryImport(AsoundDll)]
+    public static partial int snd_pcm_set_params(
         IntPtr pcm,
         int format,
         int access,
@@ -32,8 +32,8 @@ internal static unsafe partial class LibAsound
         int soft_resample,
         uint latency);
 
-    [DllImport(AsoundDll)]
-    public static extern IntPtr snd_pcm_writei(IntPtr pcm, void* buffer, UIntPtr size);
+    [LibraryImport(AsoundDll)]
+    public static partial IntPtr snd_pcm_writei(IntPtr pcm, void* buffer, UIntPtr size);
 }
 
 /// <summary>

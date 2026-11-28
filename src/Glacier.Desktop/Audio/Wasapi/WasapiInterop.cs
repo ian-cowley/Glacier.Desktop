@@ -50,14 +50,14 @@ internal static unsafe partial class WasapiInterop
         public Guid SubFormat;
     }
 
-    [DllImport("ole32.dll", ExactSpelling = true)]
-    public static extern int CoInitializeEx(IntPtr pvReserved, uint dwCoInit);
+    [LibraryImport("ole32.dll")]
+    public static partial int CoInitializeEx(IntPtr pvReserved, uint dwCoInit);
 
-    [DllImport("ole32.dll", ExactSpelling = true)]
-    public static extern void CoUninitialize();
+    [LibraryImport("ole32.dll")]
+    public static partial void CoUninitialize();
 
-    [DllImport("ole32.dll", ExactSpelling = true)]
-    public static extern int CoCreateInstance(
+    [LibraryImport("ole32.dll")]
+    public static partial int CoCreateInstance(
         in Guid rclsid,
         IntPtr pUnkOuter,
         uint dwClsContext,
@@ -114,10 +114,10 @@ internal static unsafe partial class AvrtInterop
 {
     private const string AvrtDll = "avrt.dll";
 
-    [DllImport(AvrtDll, SetLastError = true, CharSet = CharSet.Unicode)]
-    public static extern IntPtr AvSetMmThreadCharacteristicsW(string TaskName, ref uint TaskIndex);
+    [LibraryImport(AvrtDll, SetLastError = true, StringMarshalling = StringMarshalling.Utf16)]
+    public static partial IntPtr AvSetMmThreadCharacteristicsW(string TaskName, ref uint TaskIndex);
 
-    [DllImport(AvrtDll, SetLastError = true)]
+    [LibraryImport(AvrtDll, SetLastError = true)]
     [return: MarshalAs(UnmanagedType.Bool)]
-    public static extern bool AvRevertMmThreadCharacteristics(IntPtr AvrtHandle);
+    public static partial bool AvRevertMmThreadCharacteristics(IntPtr AvrtHandle);
 }

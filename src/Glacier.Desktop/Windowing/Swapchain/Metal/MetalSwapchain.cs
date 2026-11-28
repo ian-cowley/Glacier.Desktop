@@ -8,15 +8,15 @@ using Glacier.Desktop.Windowing.Platform.Mac;
 /// Apple Metal presentation swapchain acquiring the system <c>MTLDevice</c>, configuring <c>CAMetalLayer</c>,
 /// and managing 64-byte-aligned staging drawable buffers.
 /// </summary>
-public sealed unsafe class MetalSwapchain : ISwapchain
+public sealed unsafe partial class MetalSwapchain : ISwapchain
 {
     public const int MTLPixelFormatBGRA8Unorm = 80;
     public const int MTLPixelFormatRGBA16Float = 115;
 
     private const string MetalFramework = "/System/Library/Frameworks/Metal.framework/Metal";
 
-    [DllImport(MetalFramework)]
-    private static extern IntPtr MTLCreateSystemDefaultDevice();
+    [LibraryImport(MetalFramework)]
+    private static partial IntPtr MTLCreateSystemDefaultDevice();
 
     private readonly SwapchainDescription _description;
     private readonly IntPtr _metalLayer;

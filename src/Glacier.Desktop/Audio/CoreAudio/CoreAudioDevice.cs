@@ -8,7 +8,7 @@ using System.Runtime.InteropServices;
 /// Apple macOS and iOS CoreAudio output device driving an <c>AudioUnit</c> via a lock-free SPSC ring buffer
 /// and a Native AOT <c>[UnmanagedCallersOnly]</c> render callback.
 /// </summary>
-public sealed unsafe class CoreAudioDevice : IAudioDevice
+public sealed unsafe partial class CoreAudioDevice : IAudioDevice
 {
     private const string CoreAudioDll = "/System/Library/Frameworks/AudioToolbox.framework/AudioToolbox";
 
@@ -65,17 +65,17 @@ public sealed unsafe class CoreAudioDevice : IAudioDevice
         public AudioBuffer mBuffers;
     }
 
-    [DllImport(CoreAudioDll)]
-    private static extern IntPtr AudioComponentFindNext(IntPtr inComponent, ref AudioComponentDescription inDesc);
+    [LibraryImport(CoreAudioDll)]
+    private static partial IntPtr AudioComponentFindNext(IntPtr inComponent, ref AudioComponentDescription inDesc);
 
-    [DllImport(CoreAudioDll)]
-    private static extern int AudioComponentInstanceNew(IntPtr inComponent, out IntPtr outComponentInstance);
+    [LibraryImport(CoreAudioDll)]
+    private static partial int AudioComponentInstanceNew(IntPtr inComponent, out IntPtr outComponentInstance);
 
-    [DllImport(CoreAudioDll)]
-    private static extern int AudioComponentInstanceDispose(IntPtr inComponentInstance);
+    [LibraryImport(CoreAudioDll)]
+    private static partial int AudioComponentInstanceDispose(IntPtr inComponentInstance);
 
-    [DllImport(CoreAudioDll)]
-    private static extern int AudioUnitSetProperty(
+    [LibraryImport(CoreAudioDll)]
+    private static partial int AudioUnitSetProperty(
         IntPtr inUnit,
         uint inID,
         uint inScope,
@@ -83,17 +83,17 @@ public sealed unsafe class CoreAudioDevice : IAudioDevice
         void* inData,
         uint inDataSize);
 
-    [DllImport(CoreAudioDll)]
-    private static extern int AudioUnitInitialize(IntPtr inUnit);
+    [LibraryImport(CoreAudioDll)]
+    private static partial int AudioUnitInitialize(IntPtr inUnit);
 
-    [DllImport(CoreAudioDll)]
-    private static extern int AudioUnitUninitialize(IntPtr inUnit);
+    [LibraryImport(CoreAudioDll)]
+    private static partial int AudioUnitUninitialize(IntPtr inUnit);
 
-    [DllImport(CoreAudioDll)]
-    private static extern int AudioOutputUnitStart(IntPtr ci);
+    [LibraryImport(CoreAudioDll)]
+    private static partial int AudioOutputUnitStart(IntPtr ci);
 
-    [DllImport(CoreAudioDll)]
-    private static extern int AudioOutputUnitStop(IntPtr ci);
+    [LibraryImport(CoreAudioDll)]
+    private static partial int AudioOutputUnitStop(IntPtr ci);
 
     private IntPtr _audioUnit;
     private GCHandle _selfHandle;

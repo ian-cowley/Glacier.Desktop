@@ -103,6 +103,6 @@ internal static unsafe partial class DxgiInterop
         public ushort MaxFrameAverageLightLevel;
     }
 
-    [DllImport(DxgiDll, ExactSpelling = true)]
-    public static extern int CreateDXGIFactory2(uint Flags, in Guid riid, out IntPtr ppFactory);
+    [LibraryImport(DxgiDll)]
+    public static partial int CreateDXGIFactory2(uint Flags, in Guid riid, out IntPtr ppFactory);
 }

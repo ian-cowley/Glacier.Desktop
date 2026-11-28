@@ -8,21 +8,21 @@ using Glacier.Desktop.Windowing.Swapchain;
 /// Android NDK HAL implementation interfacing directly with libandroid.so ANativeWindow.
 /// <see cref="NativeHandle"/> remains <see cref="IntPtr.Zero"/> until an active JNI <c>ANativeWindow*</c> is bound via <see cref="AttachSurface"/>.
 /// </summary>
-public sealed class AndroidNativeWindow : IWindow
+public sealed partial class AndroidNativeWindow : IWindow
 {
     private const string AndroidDll = "libandroid.so";
 
-    [DllImport(AndroidDll, SetLastError = true)]
-    private static extern void ANativeWindow_acquire(IntPtr window);
+    [LibraryImport(AndroidDll, SetLastError = true)]
+    private static partial void ANativeWindow_acquire(IntPtr window);
 
-    [DllImport(AndroidDll, SetLastError = true)]
-    private static extern void ANativeWindow_release(IntPtr window);
+    [LibraryImport(AndroidDll, SetLastError = true)]
+    private static partial void ANativeWindow_release(IntPtr window);
 
-    [DllImport(AndroidDll, SetLastError = true)]
-    private static extern int ANativeWindow_getWidth(IntPtr window);
+    [LibraryImport(AndroidDll, SetLastError = true)]
+    private static partial int ANativeWindow_getWidth(IntPtr window);
 
-    [DllImport(AndroidDll, SetLastError = true)]
-    private static extern int ANativeWindow_getHeight(IntPtr window);
+    [LibraryImport(AndroidDll, SetLastError = true)]
+    private static partial int ANativeWindow_getHeight(IntPtr window);
 
     private IntPtr _nativeWindow;
     private WindowSize _size;

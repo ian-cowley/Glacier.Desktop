@@ -147,20 +147,20 @@ internal static unsafe partial class LibX11
         public IntPtr ptr4;
     }
 
-    [DllImport(DllName)]
-    public static extern IntPtr XOpenDisplay(string? displayName);
+    [LibraryImport(DllName, StringMarshalling = StringMarshalling.Utf8)]
+    public static partial IntPtr XOpenDisplay(string? displayName);
 
-    [DllImport(DllName)]
-    public static extern int XCloseDisplay(IntPtr display);
+    [LibraryImport(DllName)]
+    public static partial int XCloseDisplay(IntPtr display);
 
-    [DllImport(DllName)]
-    public static extern IntPtr XDefaultRootWindow(IntPtr display);
+    [LibraryImport(DllName)]
+    public static partial IntPtr XDefaultRootWindow(IntPtr display);
 
-    [DllImport(DllName)]
-    public static extern int XDefaultScreen(IntPtr display);
+    [LibraryImport(DllName)]
+    public static partial int XDefaultScreen(IntPtr display);
 
-    [DllImport(DllName)]
-    public static extern IntPtr XCreateSimpleWindow(
+    [LibraryImport(DllName)]
+    public static partial IntPtr XCreateSimpleWindow(
         IntPtr display,
         IntPtr parent,
         int x, int y,
@@ -169,33 +169,33 @@ internal static unsafe partial class LibX11
         UIntPtr border,
         UIntPtr background);
 
-    [DllImport(DllName)]
-    public static extern int XDestroyWindow(IntPtr display, IntPtr window);
+    [LibraryImport(DllName)]
+    public static partial int XDestroyWindow(IntPtr display, IntPtr window);
 
-    [DllImport(DllName)]
-    public static extern int XMapWindow(IntPtr display, IntPtr window);
+    [LibraryImport(DllName)]
+    public static partial int XMapWindow(IntPtr display, IntPtr window);
 
-    [DllImport(DllName)]
-    public static extern int XUnmapWindow(IntPtr display, IntPtr window);
+    [LibraryImport(DllName)]
+    public static partial int XUnmapWindow(IntPtr display, IntPtr window);
 
-    [DllImport(DllName)]
-    public static extern int XStoreName(IntPtr display, IntPtr window, string windowName);
+    [LibraryImport(DllName, StringMarshalling = StringMarshalling.Utf8)]
+    public static partial int XStoreName(IntPtr display, IntPtr window, string windowName);
 
-    [DllImport(DllName)]
-    public static extern int XSelectInput(IntPtr display, IntPtr window, IntPtr eventMask);
+    [LibraryImport(DllName)]
+    public static partial int XSelectInput(IntPtr display, IntPtr window, IntPtr eventMask);
 
-    [DllImport(DllName)]
-    public static extern int XPending(IntPtr display);
+    [LibraryImport(DllName)]
+    public static partial int XPending(IntPtr display);
 
-    [DllImport(DllName)]
-    public static extern int XNextEvent(IntPtr display, out XEvent event_return);
+    [LibraryImport(DllName)]
+    public static partial int XNextEvent(IntPtr display, out XEvent event_return);
 
-    [DllImport(DllName)]
-    public static extern IntPtr XInternAtom(IntPtr display, string atom_name, [MarshalAs(UnmanagedType.Bool)] bool only_if_exists);
+    [LibraryImport(DllName, StringMarshalling = StringMarshalling.Utf8)]
+    public static partial IntPtr XInternAtom(IntPtr display, string atom_name, [MarshalAs(UnmanagedType.Bool)] bool only_if_exists);
 
-    [DllImport(DllName)]
-    public static extern int XResizeWindow(IntPtr display, IntPtr window, uint width, uint height);
+    [LibraryImport(DllName)]
+    public static partial int XResizeWindow(IntPtr display, IntPtr window, uint width, uint height);
 
-    [DllImport(DllName)]
-    public static extern int XSetWMProtocols(IntPtr display, IntPtr window, ref IntPtr protocols, int count);
+    [LibraryImport(DllName)]
+    public static partial int XSetWMProtocols(IntPtr display, IntPtr window, ref IntPtr protocols, int count);
 }
