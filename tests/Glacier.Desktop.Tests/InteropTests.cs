@@ -17,7 +17,7 @@ public class InteropTests
         var yData = new float[] { 50f, 65f, 55f, 90f, 85f, 100f };
         figure.PlotSignal(yData, label: "Throughput (kFPS)");
 
-        var canvas = new PlotCanvas(figure)
+        using var canvas = new PlotCanvas(figure)
         {
             Width = 780f,
             Height = 460f

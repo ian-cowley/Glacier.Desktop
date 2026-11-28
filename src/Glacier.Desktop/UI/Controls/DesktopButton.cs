@@ -23,6 +23,7 @@ public class DesktopButton : VisualNode
     public bool IsHovered { get; set; }
     public bool IsPressed { get; set; }
     public Action? OnClick { get; set; }
+    private VectorPath? _rectPath;
 
     public DesktopButton(string text = "Button", Action? onClick = null)
     {
@@ -47,15 +48,16 @@ public class DesktopButton : VisualNode
         Color4 currentBg = IsPressed ? PressedBackgroundColor : (IsHovered ? HoverBackgroundColor : BackgroundColor);
         Color4 currentBorder = (IsHovered || IsPressed) ? HoverBorderColor : BorderColor;
 
-        var rectPath = new VectorPath();
-        rectPath.AddRect(Bounds.ActualX, Bounds.ActualY, Bounds.DesiredWidth, Bounds.DesiredHeight);
+        _rectPath ??= new VectorPath(4);
+        _rectPath.Clear();
+        _rectPath.AddRect(Bounds.ActualX, Bounds.ActualY, Bounds.DesiredWidth, Bounds.DesiredHeight);
 
         // Draw background
-        canvas.FillPath(rectPath, new Paint(currentBg.ToRgba32(), PaintStyle.Fill));
+        canvas.FillPath(_rectPath, new Paint(currentBg.ToRgba32(), PaintStyle.Fill));
 
         // Draw border
         float strokeWidth = IsHovered ? 1.5f : 1f;
-        canvas.DrawPath(rectPath, new Paint(currentBorder.ToRgba32(), PaintStyle.Stroke, strokeWidth));
+        canvas.DrawPath(_rectPath, new Paint(currentBorder.ToRgba32(), PaintStyle.Stroke, strokeWidth));
 
         // Draw text
         if (!string.IsNullOrEmpty(Text))

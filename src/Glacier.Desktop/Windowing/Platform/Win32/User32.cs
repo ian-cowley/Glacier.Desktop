@@ -28,8 +28,11 @@ internal static unsafe partial class User32
 
     public const uint WM_DESTROY = 0x0002;
     public const uint WM_SIZE = 0x0005;
+    public const uint WM_PAINT = 0x000F;
     public const uint WM_CLOSE = 0x0010;
     public const uint WM_QUIT = 0x0012;
+    public const uint WM_ERASEBKGND = 0x0014;
+    public const uint WM_SETCURSOR = 0x0020;
     public const uint WM_INPUT = 0x00FF;
     public const uint WM_KEYDOWN = 0x0100;
     public const uint WM_KEYUP = 0x0101;
@@ -44,6 +47,9 @@ internal static unsafe partial class User32
     public const uint WM_XBUTTONDOWN = 0x020B;
     public const uint WM_XBUTTONUP = 0x020C;
     public const uint WM_DPICHANGED = 0x02E0;
+
+    public static readonly IntPtr IDC_ARROW = new(32512);
+    public static readonly IntPtr IDC_HAND = new(32649);
 
     public const uint RID_INPUT = 0x10000003;
     public const uint RID_HEADER = 0x10000005;
@@ -69,7 +75,7 @@ internal static unsafe partial class User32
 
     public delegate IntPtr WndProc(IntPtr hWnd, uint msg, IntPtr wParam, IntPtr lParam);
 
-    [StructLayout(LayoutKind.Sequential, CharSet = CharSet.Unicode)]
+    [StructLayout(LayoutKind.Sequential)]
     public struct WNDCLASSEXW
     {
         public uint cbSize;
@@ -81,9 +87,20 @@ internal static unsafe partial class User32
         public IntPtr hIcon;
         public IntPtr hCursor;
         public IntPtr hbrBackground;
-        public string? lpszMenuName;
-        public string lpszClassName;
+        public char* lpszMenuName;
+        public char* lpszClassName;
         public IntPtr hIconSm;
+    }
+
+    [StructLayout(LayoutKind.Sequential)]
+    public struct PAINTSTRUCT
+    {
+        public IntPtr hdc;
+        public int fErase;
+        public RECT rcPaint;
+        public int fRestore;
+        public int fIncUpdate;
+        public fixed byte rgbReserved[32];
     }
 
     [StructLayout(LayoutKind.Sequential)]
@@ -176,15 +193,15 @@ internal static unsafe partial class User32
         public RAWINPUTDATA data;
     }
 
-    [DllImport(DllName, SetLastError = true, CharSet = CharSet.Unicode)]
-    public static extern ushort RegisterClassExW(ref WNDCLASSEXW lpwcx);
+    [LibraryImport(DllName, SetLastError = true)]
+    public static partial ushort RegisterClassExW(ref WNDCLASSEXW lpwcx);
 
-    [DllImport(DllName, SetLastError = true, CharSet = CharSet.Unicode)]
+    [LibraryImport(DllName, SetLastError = true, StringMarshalling = StringMarshalling.Utf16)]
     [return: MarshalAs(UnmanagedType.Bool)]
-    public static extern bool UnregisterClassW(string lpClassName, IntPtr hInstance);
+    public static partial bool UnregisterClassW(string lpClassName, IntPtr hInstance);
 
-    [DllImport(DllName, SetLastError = true, CharSet = CharSet.Unicode)]
-    public static extern IntPtr CreateWindowExW(
+    [LibraryImport(DllName, SetLastError = true, StringMarshalling = StringMarshalling.Utf16)]
+    public static partial IntPtr CreateWindowExW(
         uint dwExStyle,
         string lpClassName,
         string lpWindowName,
@@ -198,80 +215,101 @@ internal static unsafe partial class User32
         IntPtr hInstance,
         IntPtr lpParam);
 
-    [DllImport(DllName, SetLastError = true)]
+    [LibraryImport(DllName, SetLastError = true)]
     [return: MarshalAs(UnmanagedType.Bool)]
-    public static extern bool DestroyWindow(IntPtr hWnd);
+    public static partial bool DestroyWindow(IntPtr hWnd);
 
-    [DllImport(DllName)]
+    [LibraryImport(DllName)]
     [return: MarshalAs(UnmanagedType.Bool)]
-    public static extern bool IsWindow(IntPtr hWnd);
+    public static partial bool IsWindow(IntPtr hWnd);
 
-    [DllImport(DllName, SetLastError = true)]
+    [LibraryImport(DllName, SetLastError = true)]
     [return: MarshalAs(UnmanagedType.Bool)]
-    public static extern bool PostMessageW(IntPtr hWnd, uint Msg, IntPtr wParam, IntPtr lParam);
+    public static partial bool PostMessageW(IntPtr hWnd, uint Msg, IntPtr wParam, IntPtr lParam);
 
-    [DllImport(DllName, SetLastError = true)]
+    [LibraryImport(DllName, SetLastError = true)]
     [return: MarshalAs(UnmanagedType.Bool)]
-    public static extern bool ShowWindow(IntPtr hWnd, int nCmdShow);
+    public static partial bool ShowWindow(IntPtr hWnd, int nCmdShow);
 
-    [DllImport(DllName, SetLastError = true, CharSet = CharSet.Unicode)]
+    [LibraryImport(DllName)]
     [return: MarshalAs(UnmanagedType.Bool)]
-    public static extern bool SetWindowTextW(IntPtr hWnd, string lpString);
+    public static partial bool UpdateWindow(IntPtr hWnd);
 
-    [DllImport(DllName)]
-    public static extern IntPtr DefWindowProcW(IntPtr hWnd, uint uMsg, IntPtr wParam, IntPtr lParam);
-
-    [DllImport(DllName)]
+    [LibraryImport(DllName, SetLastError = true, StringMarshalling = StringMarshalling.Utf16)]
     [return: MarshalAs(UnmanagedType.Bool)]
-    public static extern bool PeekMessageW(out MSG lpMsg, IntPtr hWnd, uint wMsgFilterMin, uint wMsgFilterMax, uint wRemoveMsg);
+    public static partial bool SetWindowTextW(IntPtr hWnd, string lpString);
 
-    [DllImport(DllName)]
+    [LibraryImport(DllName)]
+    public static partial IntPtr DefWindowProcW(IntPtr hWnd, uint uMsg, IntPtr wParam, IntPtr lParam);
+
+    [LibraryImport(DllName)]
     [return: MarshalAs(UnmanagedType.Bool)]
-    public static extern bool TranslateMessage(ref MSG lpMsg);
+    public static partial bool PeekMessageW(out MSG lpMsg, IntPtr hWnd, uint wMsgFilterMin, uint wMsgFilterMax, uint wRemoveMsg);
 
-    [DllImport(DllName)]
-    public static extern IntPtr DispatchMessageW(ref MSG lpMsg);
-
-    [DllImport(DllName, SetLastError = true)]
+    [LibraryImport(DllName)]
     [return: MarshalAs(UnmanagedType.Bool)]
-    public static extern bool GetClientRect(IntPtr hWnd, out RECT lpRect);
+    public static partial bool TranslateMessage(ref MSG lpMsg);
 
-    [DllImport(DllName, SetLastError = true)]
+    [LibraryImport(DllName)]
+    public static partial IntPtr DispatchMessageW(ref MSG lpMsg);
+
+    [LibraryImport(DllName)]
+    public static partial void PostQuitMessage(int nExitCode);
+
+    [LibraryImport(DllName, SetLastError = true)]
     [return: MarshalAs(UnmanagedType.Bool)]
-    public static extern bool GetCursorPos(out POINT lpPoint);
+    public static partial bool GetClientRect(IntPtr hWnd, out RECT lpRect);
 
-    [DllImport(DllName, SetLastError = true)]
+    [LibraryImport(DllName, SetLastError = true)]
     [return: MarshalAs(UnmanagedType.Bool)]
-    public static extern bool ScreenToClient(IntPtr hWnd, ref POINT lpPoint);
+    public static partial bool GetCursorPos(out POINT lpPoint);
 
-    [DllImport(DllName)]
-    public static extern int GetSystemMetrics(int nIndex);
-
-    [DllImport(DllName)]
-    public static extern IntPtr GetDC(IntPtr hWnd);
-
-    [DllImport(DllName)]
-    public static extern int ReleaseDC(IntPtr hWnd, IntPtr hDC);
-
-    [DllImport(DllName, SetLastError = true)]
+    [LibraryImport(DllName, SetLastError = true)]
     [return: MarshalAs(UnmanagedType.Bool)]
-    public static extern bool AdjustWindowRectEx(ref RECT lpRect, uint dwStyle, [MarshalAs(UnmanagedType.Bool)] bool bMenu, uint dwExStyle);
+    public static partial bool ScreenToClient(IntPtr hWnd, ref POINT lpPoint);
 
-    [DllImport(DllName, SetLastError = true)]
+    [LibraryImport(DllName)]
+    public static partial int GetSystemMetrics(int nIndex);
+
+    [LibraryImport(DllName)]
+    public static partial IntPtr GetDC(IntPtr hWnd);
+
+    [LibraryImport(DllName)]
+    public static partial int ReleaseDC(IntPtr hWnd, IntPtr hDC);
+
+    [LibraryImport(DllName)]
+    public static partial IntPtr BeginPaint(IntPtr hWnd, out PAINTSTRUCT lpPaint);
+
+    [LibraryImport(DllName)]
     [return: MarshalAs(UnmanagedType.Bool)]
-    public static extern bool SetWindowPos(IntPtr hWnd, IntPtr hWndInsertAfter, int X, int Y, int cx, int cy, uint uFlags);
+    public static partial bool EndPaint(IntPtr hWnd, ref PAINTSTRUCT lpPaint);
 
-    [DllImport(DllName, SetLastError = true)]
+    [LibraryImport(DllName)]
     [return: MarshalAs(UnmanagedType.Bool)]
-    public static extern bool RegisterRawInputDevices(RAWINPUTDEVICE* pRawInputDevices, uint uiNumDevices, uint cbSize);
+    public static partial bool InvalidateRect(IntPtr hWnd, IntPtr lpRect, [MarshalAs(UnmanagedType.Bool)] bool bErase);
 
-    [DllImport(DllName, SetLastError = true)]
-    public static extern uint GetRawInputData(IntPtr hRawInput, uint uiCommand, void* pData, ref uint pcbSize, uint cbSizeHeader);
-
-    [DllImport(DllName, SetLastError = true)]
+    [LibraryImport(DllName, SetLastError = true)]
     [return: MarshalAs(UnmanagedType.Bool)]
-    public static extern bool SetProcessDpiAwarenessContext(IntPtr dpiFlag);
+    public static partial bool AdjustWindowRectEx(ref RECT lpRect, uint dwStyle, [MarshalAs(UnmanagedType.Bool)] bool bMenu, uint dwExStyle);
 
-    [DllImport(DllName)]
-    public static extern IntPtr LoadCursorW(IntPtr hInstance, IntPtr lpCursorName);
+    [LibraryImport(DllName, SetLastError = true)]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    public static partial bool SetWindowPos(IntPtr hWnd, IntPtr hWndInsertAfter, int X, int Y, int cx, int cy, uint uFlags);
+
+    [LibraryImport(DllName, SetLastError = true)]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    public static partial bool RegisterRawInputDevices(RAWINPUTDEVICE* pRawInputDevices, uint uiNumDevices, uint cbSize);
+
+    [LibraryImport(DllName, SetLastError = true)]
+    public static partial uint GetRawInputData(IntPtr hRawInput, uint uiCommand, void* pData, ref uint pcbSize, uint cbSizeHeader);
+
+    [LibraryImport(DllName, SetLastError = true)]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    public static partial bool SetProcessDpiAwarenessContext(IntPtr dpiFlag);
+
+    [LibraryImport(DllName)]
+    public static partial IntPtr LoadCursorW(IntPtr hInstance, IntPtr lpCursorName);
+
+    [LibraryImport(DllName)]
+    public static partial IntPtr SetCursor(IntPtr hCursor);
 }

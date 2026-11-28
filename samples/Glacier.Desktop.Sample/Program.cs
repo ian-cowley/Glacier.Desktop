@@ -10,6 +10,7 @@ using Glacier.Desktop.UI;
 using Glacier.Desktop.UI.Containers;
 using Glacier.Desktop.UI.Controls;
 using Glacier.Desktop.Windowing;
+using Glacier.Desktop.Windowing.Platform.Win32;
 using Glacier.Plot.Figures;
 using Glacier.Plot.Interop;
 using Glacier.Polaris;
@@ -109,7 +110,7 @@ public static class Program
             statusBar.Status = $"SIMD Layout scan complete across 16 boxes (Action #{++clickCount})";
         };
 
-        var grid = new VirtualDataGrid
+        using var grid = new VirtualDataGrid
         {
             SourceDataFrame = polarisFrame,
             Width = 780f
@@ -201,7 +202,7 @@ public static class Program
 
         mainSplit.Add(grid, DockPosition.Left);
 
-        var plotCanvas = new PlotCanvas(plotFigure);
+        using var plotCanvas = new PlotCanvas(plotFigure);
         mainSplit.Add(plotCanvas, DockPosition.Fill);
 
         rootDock.Add(mainSplit, DockPosition.Fill);
@@ -348,14 +349,14 @@ public static class Program
         rootDock.Add(statusBar, DockPosition.Bottom);
 
         var mainSplit = new DockPanel();
-        var grid = new VirtualDataGrid
+        using var grid = new VirtualDataGrid
         {
             SourceDataFrame = polarisFrame,
             Width = 780f
         };
         mainSplit.Add(grid, DockPosition.Left);
 
-        var plotCanvas = new PlotCanvas(plotFigure);
+        using var plotCanvas = new PlotCanvas(plotFigure);
         mainSplit.Add(plotCanvas, DockPosition.Fill);
         rootDock.Add(mainSplit, DockPosition.Fill);
 

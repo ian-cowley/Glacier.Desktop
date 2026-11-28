@@ -1,8 +1,10 @@
 namespace Glacier.Desktop.Grids;
 
 using System;
+using System.Buffers;
 using System.Globalization;
 using System.Runtime.CompilerServices;
+using System.Text;
 using Glacier.Desktop.Layout;
 using Glacier.Desktop.UI;
 using Glacier.Polaris;
@@ -12,12 +14,13 @@ using Glacier.Graphics.Text;
 using Glacier.Graphics.Vector;
 
 /// <summary>
-/// High-performance GPU-rendered virtual data grid capable of rendering 1,000,000+ rows
-/// at a locked 120 FPS with zero heap allocations on scroll hot paths.
+/// High-performance CPU/GPU-rendered virtual data grid capable of rendering 1,000,000+ rows
+/// with pooled vector paths and zero-allocation cell formatting on scroll hot paths.
 /// </summary>
 public sealed class VirtualDataGrid : VisualNode, IDisposable
 {
     private DataFrame? _source;
+    private bool _disposed;
 
     private static readonly Font s_headerFont = new(12f, bold: true);
     private static readonly Font s_cellFont = new(12f, bold: false);
@@ -25,6 +28,12 @@ public sealed class VirtualDataGrid : VisualNode, IDisposable
     private readonly Paint _selPaint = new(new Rgba32(25, 75, 140, 240), PaintStyle.Fill);
     private readonly Paint _trackPaint = new(new Rgba32(20, 24, 32, 200), PaintStyle.Fill);
     private Paint _cellTextPaint = new(Rgba32.White, PaintStyle.Fill);
+
+    private readonly VectorPath _clipPath = new(8);
+    private readonly VectorPath _scratchPath = new(8);
+    private readonly VectorPath _evenRowsPath = new(128);
+    private readonly VectorPath _oddRowsPath = new(128);
+    private readonly VectorPath _gridLinesPath = new(256);
 
     public DataFrame? SourceDataFrame
     {
@@ -74,7 +83,7 @@ public sealed class VirtualDataGrid : VisualNode, IDisposable
 
     public bool HandleMouseDown(float px, float py)
     {
-        if (_source == null || TotalRowCount == 0) return false;
+        if (_disposed || _source == null || TotalRowCount == 0) return false;
 
         float gridX = Bounds.ActualX;
         float gridY = Bounds.ActualY;
@@ -83,7 +92,7 @@ public sealed class VirtualDataGrid : VisualNode, IDisposable
         float bodyY = gridY + HeaderHeight;
         float bodyH = gridH - HeaderHeight;
 
-        // Check scrollbar click (right 16px)
+        // Check scrollbar click (right 14px)
         float trackW = 14f;
         float trackX = gridX + gridW - trackW;
         if (px >= trackX && px <= gridX + gridW && py >= bodyY && py <= gridY + gridH)
@@ -111,7 +120,7 @@ public sealed class VirtualDataGrid : VisualNode, IDisposable
 
     public bool HandleMouseMove(float px, float py, bool isMouseDown)
     {
-        if (_isDraggingScrollbar && isMouseDown)
+        if (!_disposed && _isDraggingScrollbar && isMouseDown)
         {
             float gridY = Bounds.ActualY;
             float gridH = Bounds.DesiredHeight;
@@ -139,6 +148,7 @@ public sealed class VirtualDataGrid : VisualNode, IDisposable
 
     public override void Render(IGraphicsCanvas canvas)
     {
+        ObjectDisposedException.ThrowIf(_disposed, this);
         if (!IsVisible) return;
         base.Render(canvas);
 
@@ -153,34 +163,32 @@ public sealed class VirtualDataGrid : VisualNode, IDisposable
         float colWidth = gridW / MathF.Max(1, colCount);
 
         canvas.Save();
-        var clipPath = new VectorPath();
-        clipPath.AddRect(gridX, gridY, gridW, gridH);
-        canvas.ClipPath(clipPath);
+        _clipPath.Clear();
+        _clipPath.AddRect(gridX, gridY, gridW, gridH);
+        canvas.ClipPath(_clipPath);
 
         // 1. Render Column Headers
-        var headerPath = new VectorPath();
-        headerPath.AddRect(gridX, gridY, gridW, HeaderHeight);
-        canvas.FillPath(headerPath, new Paint(HeaderBg.ToRgba32(), PaintStyle.Fill));
+        _scratchPath.Clear();
+        _scratchPath.AddRect(gridX, gridY, gridW, HeaderHeight);
+        canvas.FillPath(_scratchPath, new Paint(HeaderBg.ToRgba32(), PaintStyle.Fill));
 
         var headerTextPaint = new Paint(Color4.GlacierBlue.ToRgba32(), PaintStyle.Fill);
         var gridLinePaint = new Paint(GridLineColor.ToRgba32(), PaintStyle.Stroke, 1f);
 
+        _gridLinesPath.Clear();
         for (int c = 0; c < colCount; c++)
         {
             float cx = gridX + c * colWidth;
             canvas.DrawText(_source.Columns[c].Name.AsSpan(), cx + 8f, gridY + 20f, s_headerFont, headerTextPaint);
-            var colLine = new VectorPath();
-            colLine.AddLine(cx, gridY, cx, gridY + gridH);
-            canvas.DrawPath(colLine, gridLinePaint);
+            _gridLinesPath.AddLine(cx, gridY, cx, gridY + gridH);
         }
-        var hLine = new VectorPath();
-        hLine.AddLine(gridX, gridY + HeaderHeight, gridX + gridW, gridY + HeaderHeight);
-        canvas.DrawPath(hLine, gridLinePaint);
+        _gridLinesPath.AddLine(gridX, gridY + HeaderHeight, gridX + gridW, gridY + HeaderHeight);
 
         // 2. Render Virtualized Rows
         long totalRows = TotalRowCount;
         if (totalRows == 0)
         {
+            canvas.DrawPath(_gridLinesPath, gridLinePaint);
             canvas.Restore();
             return;
         }
@@ -190,47 +198,76 @@ public sealed class VirtualDataGrid : VisualNode, IDisposable
 
         long startRow = (long)MathF.Floor(ScrollOffsetY / RowHeight);
         startRow = Math.Clamp(startRow, 0, totalRows);
-        int rowsToRender = Math.Min(VisibleRowCount + 2, (int)(totalRows - startRow));
+        int rowsToRender = (int)Math.Min((long)VisibleRowCount + 2L, Math.Max(0L, totalRows - startRow));
 
         var rowEvenPaint = new Paint(RowBgEven.ToRgba32(), PaintStyle.Fill);
         var rowOddPaint = new Paint(RowBgOdd.ToRgba32(), PaintStyle.Fill);
         _cellTextPaint = new Paint(TextColor.ToRgba32(), PaintStyle.Fill);
         var selBarPaint = new Paint(Color4.GlacierBlue.ToRgba32(), PaintStyle.Fill);
 
+        _evenRowsPath.Clear();
+        _oddRowsPath.Clear();
+
+        float scrollMod = ScrollOffsetY % RowHeight;
+        long? selectedDrawRow = null;
+        float selectedDrawY = 0f;
+
         for (int r = 0; r < rowsToRender; r++)
         {
             long rowIndex = startRow + r;
             if (rowIndex >= totalRows) break;
 
-            float rowY = bodyY + (r * RowHeight) - (ScrollOffsetY % RowHeight);
-            bool isSelected = rowIndex == SelectedRowIndex;
-
-            var rowRect = new VectorPath();
-            rowRect.AddRect(gridX, rowY, gridW, RowHeight);
-
-            if (isSelected)
+            float rowY = bodyY + (r * RowHeight) - scrollMod;
+            if (rowIndex == SelectedRowIndex)
             {
-                canvas.FillPath(rowRect, _selPaint);
-                var selBar = new VectorPath();
-                selBar.AddRect(gridX, rowY, 4f, RowHeight);
-                canvas.FillPath(selBar, selBarPaint);
+                selectedDrawRow = rowIndex;
+                selectedDrawY = rowY;
+            }
+            else if ((rowIndex & 1L) == 0L)
+            {
+                _evenRowsPath.AddRect(gridX, rowY, gridW, RowHeight);
             }
             else
             {
-                var rowPaint = (rowIndex % 2 == 0) ? rowEvenPaint : rowOddPaint;
-                canvas.FillPath(rowRect, rowPaint);
+                _oddRowsPath.AddRect(gridX, rowY, gridW, RowHeight);
             }
 
+            _gridLinesPath.AddLine(gridX, rowY + RowHeight, gridX + gridW, rowY + RowHeight);
+        }
+
+        if (_evenRowsPath.VerbCount > 0)
+        {
+            canvas.FillPath(_evenRowsPath, rowEvenPaint);
+        }
+        if (_oddRowsPath.VerbCount > 0)
+        {
+            canvas.FillPath(_oddRowsPath, rowOddPaint);
+        }
+        if (selectedDrawRow.HasValue)
+        {
+            _scratchPath.Clear();
+            _scratchPath.AddRect(gridX, selectedDrawY, gridW, RowHeight);
+            canvas.FillPath(_scratchPath, _selPaint);
+
+            _scratchPath.Clear();
+            _scratchPath.AddRect(gridX, selectedDrawY, 4f, RowHeight);
+            canvas.FillPath(_scratchPath, selBarPaint);
+        }
+
+        for (int r = 0; r < rowsToRender; r++)
+        {
+            long rowIndex = startRow + r;
+            if (rowIndex >= totalRows) break;
+
+            float rowY = bodyY + (r * RowHeight) - scrollMod;
             for (int c = 0; c < colCount; c++)
             {
                 float cx = gridX + c * colWidth;
-                RenderCell(canvas, _source.Columns[c], (int)rowIndex, cx + 8f, rowY + 19f);
+                RenderCell(canvas, _source.Columns[c], rowIndex, cx + 8f, rowY + 19f);
             }
-
-            var rowLine = new VectorPath();
-            rowLine.AddLine(gridX, rowY + RowHeight, gridX + gridW, rowY + RowHeight);
-            canvas.DrawPath(rowLine, gridLinePaint);
         }
+
+        canvas.DrawPath(_gridLinesPath, gridLinePaint);
 
         // 3. Render Modern Scrollbar
         float trackW = 12f;
@@ -238,9 +275,9 @@ public sealed class VirtualDataGrid : VisualNode, IDisposable
         float trackY = bodyY;
         float trackH = bodyH;
 
-        var trackRect = new VectorPath();
-        trackRect.AddRect(trackX, trackY, trackW, trackH);
-        canvas.FillPath(trackRect, _trackPaint);
+        _scratchPath.Clear();
+        _scratchPath.AddRect(trackX, trackY, trackW, trackH);
+        canvas.FillPath(_scratchPath, _trackPaint);
 
         float viewRatio = trackH / MathF.Max(trackH, TotalRowCount * RowHeight);
         float thumbH = Math.Clamp(trackH * viewRatio, 24f, trackH);
@@ -248,9 +285,9 @@ public sealed class VirtualDataGrid : VisualNode, IDisposable
         float thumbY = trackY + scrollRatio * (trackH - thumbH);
 
         var thumbColor = _isDraggingScrollbar ? Color4.GlacierBlue.ToRgba32() : new Rgba32(70, 95, 130, 220);
-        var thumbRect = new VectorPath();
-        thumbRect.AddRect(trackX + 2f, thumbY, trackW - 4f, thumbH);
-        canvas.FillPath(thumbRect, new Paint(thumbColor, PaintStyle.Fill));
+        _scratchPath.Clear();
+        _scratchPath.AddRect(trackX + 2f, thumbY, trackW - 4f, thumbH);
+        canvas.FillPath(_scratchPath, new Paint(thumbColor, PaintStyle.Fill));
 
         canvas.Restore();
     }
@@ -269,9 +306,15 @@ public sealed class VirtualDataGrid : VisualNode, IDisposable
         canvas.DrawText(chars, x, y, s_cellFont, _cellTextPaint);
     }
 
-    private void RenderCell(IGraphicsCanvas canvas, ISeries col, int rowIndex, float x, float y)
+    private void RenderCell(IGraphicsCanvas canvas, ISeries col, long rowIndex, float x, float y)
     {
-        if (col.ValidityMask.IsNull(rowIndex))
+        if ((ulong)rowIndex >= (ulong)col.Length)
+        {
+            return;
+        }
+        int idx = (int)rowIndex;
+
+        if (col.ValidityMask.IsNull(idx))
         {
             canvas.DrawText("null".AsSpan(), x, y, s_cellFont, _cellTextPaint);
             return;
@@ -282,7 +325,7 @@ public sealed class VirtualDataGrid : VisualNode, IDisposable
 
         if (col is Series<int> intCol)
         {
-            int intVal = intCol[rowIndex];
+            int intVal = intCol[idx];
             if ((uint)intVal < (uint)s_intStrings.Length)
             {
                 canvas.DrawText(s_intStrings[intVal].AsSpan(), x, y, s_cellFont, _cellTextPaint);
@@ -296,7 +339,7 @@ public sealed class VirtualDataGrid : VisualNode, IDisposable
         }
         else if (col is Series<float> floatCol)
         {
-            if (floatCol[rowIndex].TryFormat(charBuffer, out written, "G6", CultureInfo.InvariantCulture))
+            if (floatCol[idx].TryFormat(charBuffer, out written, "G6", CultureInfo.InvariantCulture))
             {
                 DrawSpan(canvas, charBuffer[..written], x, y);
                 return;
@@ -304,7 +347,7 @@ public sealed class VirtualDataGrid : VisualNode, IDisposable
         }
         else if (col is Series<double> dblCol)
         {
-            if (dblCol[rowIndex].TryFormat(charBuffer, out written, "G6", CultureInfo.InvariantCulture))
+            if (dblCol[idx].TryFormat(charBuffer, out written, "G6", CultureInfo.InvariantCulture))
             {
                 DrawSpan(canvas, charBuffer[..written], x, y);
                 return;
@@ -312,7 +355,7 @@ public sealed class VirtualDataGrid : VisualNode, IDisposable
         }
         else if (col is Series<long> longCol)
         {
-            if (longCol[rowIndex].TryFormat(charBuffer, out written))
+            if (longCol[idx].TryFormat(charBuffer, out written))
             {
                 DrawSpan(canvas, charBuffer[..written], x, y);
                 return;
@@ -320,20 +363,41 @@ public sealed class VirtualDataGrid : VisualNode, IDisposable
         }
         else if (col is CategoricalSeries catCol)
         {
-            uint code = catCol[rowIndex];
+            uint code = catCol[idx];
             string catText = code < (uint)catCol.RevMap.Length ? catCol.RevMap[code] : "Unknown";
             canvas.DrawText(catText.AsSpan(), x, y, s_cellFont, _cellTextPaint);
             return;
         }
         else if (col is Utf8StringSeries utf8Col)
         {
-            string text = utf8Col.GetString(rowIndex) ?? "null";
-            canvas.DrawText(text.AsSpan(), x, y, s_cellFont, _cellTextPaint);
+            ReadOnlySpan<byte> utf8 = utf8Col.GetStringSpan(idx);
+            if (utf8.IsEmpty)
+            {
+                return;
+            }
+
+            int charCount = Encoding.UTF8.GetCharCount(utf8);
+            char[]? rented = null;
+            Span<char> decoded = charCount <= 256
+                ? stackalloc char[256]
+                : (rented = ArrayPool<char>.Shared.Rent(charCount));
+            try
+            {
+                int decodedLen = Encoding.UTF8.GetChars(utf8, decoded);
+                DrawSpan(canvas, decoded[..decodedLen], x, y);
+            }
+            finally
+            {
+                if (rented is not null)
+                {
+                    ArrayPool<char>.Shared.Return(rented);
+                }
+            }
             return;
         }
         else if (col is Series<uint> uintCol)
         {
-            if (uintCol[rowIndex].TryFormat(charBuffer, out written))
+            if (uintCol[idx].TryFormat(charBuffer, out written))
             {
                 DrawSpan(canvas, charBuffer[..written], x, y);
                 return;
@@ -341,7 +405,7 @@ public sealed class VirtualDataGrid : VisualNode, IDisposable
         }
         else if (col is Series<ulong> ulongCol)
         {
-            if (ulongCol[rowIndex].TryFormat(charBuffer, out written))
+            if (ulongCol[idx].TryFormat(charBuffer, out written))
             {
                 DrawSpan(canvas, charBuffer[..written], x, y);
                 return;
@@ -349,19 +413,92 @@ public sealed class VirtualDataGrid : VisualNode, IDisposable
         }
         else if (col is Series<bool> boolCol)
         {
-            if (boolCol[rowIndex].TryFormat(charBuffer, out written))
+            if (boolCol[idx].TryFormat(charBuffer, out written))
+            {
+                DrawSpan(canvas, charBuffer[..written], x, y);
+                return;
+            }
+        }
+        else if (col is Series<sbyte> sbyteCol)
+        {
+            if (sbyteCol[idx].TryFormat(charBuffer, out written))
+            {
+                DrawSpan(canvas, charBuffer[..written], x, y);
+                return;
+            }
+        }
+        else if (col is Series<byte> byteCol)
+        {
+            if (byteCol[idx].TryFormat(charBuffer, out written))
+            {
+                DrawSpan(canvas, charBuffer[..written], x, y);
+                return;
+            }
+        }
+        else if (col is Series<short> shortCol)
+        {
+            if (shortCol[idx].TryFormat(charBuffer, out written))
+            {
+                DrawSpan(canvas, charBuffer[..written], x, y);
+                return;
+            }
+        }
+        else if (col is Series<ushort> ushortCol)
+        {
+            if (ushortCol[idx].TryFormat(charBuffer, out written))
+            {
+                DrawSpan(canvas, charBuffer[..written], x, y);
+                return;
+            }
+        }
+        else if (col is Series<decimal> decCol)
+        {
+            if (decCol[idx].TryFormat(charBuffer, out written, default, CultureInfo.InvariantCulture))
+            {
+                DrawSpan(canvas, charBuffer[..written], x, y);
+                return;
+            }
+        }
+        else if (col is Series<DateTime> dtCol)
+        {
+            if (dtCol[idx].TryFormat(charBuffer, out written, "O", CultureInfo.InvariantCulture))
+            {
+                DrawSpan(canvas, charBuffer[..written], x, y);
+                return;
+            }
+        }
+        else if (col is Series<DateTimeOffset> dtoCol)
+        {
+            if (dtoCol[idx].TryFormat(charBuffer, out written, "O", CultureInfo.InvariantCulture))
+            {
+                DrawSpan(canvas, charBuffer[..written], x, y);
+                return;
+            }
+        }
+        else if (col is Series<TimeSpan> tsCol)
+        {
+            if (tsCol[idx].TryFormat(charBuffer, out written, "c", CultureInfo.InvariantCulture))
             {
                 DrawSpan(canvas, charBuffer[..written], x, y);
                 return;
             }
         }
 
-        object? val = col.Get(rowIndex);
+        object? val = col.Get(idx);
         string fallbackText = val?.ToString() ?? "null";
         canvas.DrawText(fallbackText.AsSpan(), x, y, s_cellFont, _cellTextPaint);
     }
 
     public void Dispose()
     {
+        if (_disposed) return;
+        _disposed = true;
+        _source = null;
+        OnRowSelected = null;
+        _clipPath.Clear();
+        _scratchPath.Clear();
+        _evenRowsPath.Clear();
+        _oddRowsPath.Clear();
+        _gridLinesPath.Clear();
     }
 }

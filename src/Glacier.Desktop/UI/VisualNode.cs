@@ -20,6 +20,7 @@ public abstract class VisualNode
 
     protected float _explicitWidth = float.NaN;
     protected float _explicitHeight = float.NaN;
+    private VectorPath? _bgPath;
 
     public float Width
     {
@@ -66,9 +67,10 @@ public abstract class VisualNode
 
         if (BackgroundColor.A > 0)
         {
-            var path = new VectorPath();
-            path.AddRect(Bounds.ActualX, Bounds.ActualY, Bounds.DesiredWidth, Bounds.DesiredHeight);
-            canvas.FillPath(path, new Paint(BackgroundColor.ToRgba32(), PaintStyle.Fill));
+            _bgPath ??= new VectorPath(4);
+            _bgPath.Clear();
+            _bgPath.AddRect(Bounds.ActualX, Bounds.ActualY, Bounds.DesiredWidth, Bounds.DesiredHeight);
+            canvas.FillPath(_bgPath, new Paint(BackgroundColor.ToRgba32(), PaintStyle.Fill));
         }
     }
 

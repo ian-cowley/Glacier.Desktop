@@ -8,8 +8,8 @@ using Glacier.Desktop.UI.Controls;
 using Glacier.Desktop.Grids;
 
 /// <summary>
-/// Native desktop window orchestrator managing the visual tree, layout calculations, and GPU frames.
-/// Directly bridges with Glacier.Windowing native message loops to eliminate UI input polling jitter.
+/// Native desktop window orchestrator managing the visual tree, layout calculations, and frames.
+/// Bridges directly with <see cref="IWindow"/> native message loops to eliminate UI input polling jitter.
 /// </summary>
 public class GlacierWindow : IDisposable
 {

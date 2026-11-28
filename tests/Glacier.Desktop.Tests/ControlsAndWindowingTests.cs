@@ -8,6 +8,7 @@ using Glacier.Desktop.UI;
 using Glacier.Desktop.UI.Containers;
 using Glacier.Desktop.UI.Controls;
 using Glacier.Desktop.Windowing;
+using Glacier.Desktop.Windowing.Platform.Win32;
 using Glacier.Desktop.Windowing.Swapchain.Software;
 using Glacier.Graphics;
 using Glacier.Graphics.Raster;

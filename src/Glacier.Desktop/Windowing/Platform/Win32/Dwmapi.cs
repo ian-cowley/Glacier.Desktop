@@ -11,45 +11,45 @@ internal static unsafe partial class Dwmapi
     public const int DWMWA_WINDOW_CORNER_PREFERENCE = 33;
     public const int DWMWA_SYSTEMBACKDROP_TYPE = 38;
 
-    [DllImport(DllName, PreserveSig = true)]
-    public static extern int DwmSetWindowAttribute(IntPtr hwnd, int dwAttribute, void* pvAttribute, uint cbAttribute);
+    [LibraryImport(DllName)]
+    public static partial int DwmSetWindowAttribute(IntPtr hwnd, int dwAttribute, void* pvAttribute, uint cbAttribute);
 
-    [DllImport(DllName, PreserveSig = true)]
-    public static extern int DwmFlush();
+    [LibraryImport(DllName)]
+    public static partial int DwmFlush();
 }
 
 internal static unsafe partial class Kernel32
 {
     private const string DllName = "kernel32.dll";
 
-    [DllImport(DllName, SetLastError = true, CharSet = CharSet.Unicode)]
-    public static extern IntPtr GetModuleHandleW(string? lpModuleName);
+    [LibraryImport(DllName, SetLastError = true, StringMarshalling = StringMarshalling.Utf16)]
+    public static partial IntPtr GetModuleHandleW(string? lpModuleName);
 
-    [DllImport(DllName)]
-    public static extern uint GetCurrentThreadId();
+    [LibraryImport(DllName)]
+    public static partial uint GetCurrentThreadId();
 
-    [DllImport(DllName, SetLastError = true, CharSet = CharSet.Unicode)]
-    public static extern IntPtr CreateEventW(
+    [LibraryImport(DllName, SetLastError = true, StringMarshalling = StringMarshalling.Utf16)]
+    public static partial IntPtr CreateEventW(
         IntPtr lpEventAttributes,
         [MarshalAs(UnmanagedType.Bool)] bool bManualReset,
         [MarshalAs(UnmanagedType.Bool)] bool bInitialState,
         string? lpName);
 
-    [DllImport(DllName, SetLastError = true)]
+    [LibraryImport(DllName, SetLastError = true)]
     [return: MarshalAs(UnmanagedType.Bool)]
-    public static extern bool SetEvent(IntPtr hEvent);
+    public static partial bool SetEvent(IntPtr hEvent);
 
-    [DllImport(DllName, SetLastError = true)]
+    [LibraryImport(DllName, SetLastError = true)]
     [return: MarshalAs(UnmanagedType.Bool)]
-    public static extern bool CloseHandle(IntPtr hObject);
+    public static partial bool CloseHandle(IntPtr hObject);
 
-    [DllImport(DllName)]
+    [LibraryImport(DllName)]
     [return: MarshalAs(UnmanagedType.Bool)]
-    public static extern bool QueryPerformanceCounter(out long lpPerformanceCount);
+    public static partial bool QueryPerformanceCounter(out long lpPerformanceCount);
 
-    [DllImport(DllName)]
+    [LibraryImport(DllName)]
     [return: MarshalAs(UnmanagedType.Bool)]
-    public static extern bool QueryPerformanceFrequency(out long lpFrequency);
+    public static partial bool QueryPerformanceFrequency(out long lpFrequency);
 }
 
 internal static unsafe partial class Gdi32
@@ -83,8 +83,8 @@ internal static unsafe partial class Gdi32
         public uint bmiColors;
     }
 
-    [DllImport(DllName, ExactSpelling = true)]
-    public static extern int StretchDIBits(
+    [LibraryImport(DllName)]
+    public static partial int StretchDIBits(
         IntPtr hdc,
         int xDest,
         int yDest,
@@ -99,9 +99,24 @@ internal static unsafe partial class Gdi32
         uint iUsage,
         uint rop);
 
+    [LibraryImport(DllName)]
+    public static partial int SetDIBitsToDevice(
+        IntPtr hdc,
+        int xDest,
+        int yDest,
+        uint w,
+        uint h,
+        int xSrc,
+        int ySrc,
+        uint uStartScan,
+        uint cScanLines,
+        void* lpvBits,
+        BITMAPINFO* lpbmi,
+        uint fuColorUse);
+
     /// <summary>
     /// Blits an unmanaged RGBA8888 pixel buffer to the specified Win32 HWND client area,
-    /// converting RGBA to top-down BGRA32 into the provided scratch buffer.
+    /// converting RGBA to top-down BGRA32 into the provided scratch buffer via SIMD.
     /// </summary>
     public static void PresentRgbaToHwnd(IntPtr hwnd, void* rgbaSource, void* bgraScratch, int width, int height)
     {
@@ -115,16 +130,10 @@ internal static unsafe partial class Gdi32
             return;
         }
 
-        int pixelCount = width * height;
-        uint* src = (uint*)rgbaSource;
-        uint* dst = (uint*)bgraScratch;
-
-        // Swizzle little-endian 0xAABBGGRR (RGBA byte order) -> 0xAARRGGBB (BGRA byte order for Win32 DIB)
-        for (int i = 0; i < pixelCount; i++)
-        {
-            uint px = src[i];
-            dst[i] = (px & 0xFF00FF00u) | ((px & 0x000000FFu) << 16) | ((px & 0x00FF0000u) >> 16);
-        }
+        int byteCount = checked(width * height * 4);
+        Win32Window.ConvertRgbaToBgra(
+            new ReadOnlySpan<byte>(rgbaSource, byteCount),
+            new Span<byte>(bgraScratch, byteCount));
 
         IntPtr hdc = User32.GetDC(hwnd);
         if (hdc == IntPtr.Zero)

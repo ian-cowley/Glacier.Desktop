@@ -18,7 +18,7 @@
     <PackageReleaseNotes>v1.2.1: 128B cache-line isolated shadow cursors in SpscAudioRingBuffer and aligned Graphics/Plot/Polaris dependencies.</PackageReleaseNotes>
     <Authors>Ian Cowley</Authors>
     <Company>Glacier High-Performance Ecosystem</Company>
-    <Description>Hardware-accelerated native desktop GUI engine and virtualized data grid for .NET 10 Native AOT. Sub-15ms cold startup, SIMD Kogge-Stone layout calculations, Glacier.Graphics and Glacier.Windowing foundational integration, and 1,000,000+ row virtual grids at 120 FPS.</Description>
+    <Description>Hardware-accelerated native desktop GUI engine, cross-platform windowing/audio HAL, and virtualized data grid for .NET 10 Native AOT. Sub-15ms cold startup, SIMD Kogge-Stone layout calculations, Glacier.Graphics integration, and 1,000,000+ row virtual grids at 120 FPS.</Description>
     <PackageLicenseExpression>MIT</PackageLicenseExpression>
     <PackageProjectUrl>https://github.com/ian-cowley/Glacier.Desktop</PackageProjectUrl>
     <RepositoryUrl>https://github.com/ian-cowley/Glacier.Desktop.git</RepositoryUrl>
@@ -35,14 +35,14 @@
     <None Include="..\..\README.md" Pack="true" PackagePath="\" />
   </ItemGroup>
 
-  <ItemGroup Condition="Exists('../../../Glacier.Graphics/src/Glacier.Graphics/Glacier.Graphics.csproj') and '$(UseLocalProjectReferences)' != 'false'">
-    <ProjectReference Include="../../../Glacier.Graphics/src/Glacier.Graphics/Glacier.Graphics.csproj" />
-    <ProjectReference Include="../../../Glacier.Plot/src/Glacier.Plot/Glacier.Plot.csproj" />
-    <ProjectReference Include="../../../Glacier.Polaris/src/Glacier.Polaris/Glacier.Polaris.csproj" />
-  </ItemGroup>
-  <ItemGroup Condition="!Exists('../../../Glacier.Graphics/src/Glacier.Graphics/Glacier.Graphics.csproj') or '$(UseLocalProjectReferences)' == 'false'">
-    <PackageReference Include="Glacier.Graphics" Version="1.2.1" />
-    <PackageReference Include="Glacier.Plot" Version="1.2.1" />
-    <PackageReference Include="Glacier.Polaris" Version="1.2.6" />
+  <ItemGroup>
+    <ProjectReference Include="../../../Glacier.Graphics/src/Glacier.Graphics/Glacier.Graphics.csproj" Condition="Exists('../../../Glacier.Graphics/src/Glacier.Graphics/Glacier.Graphics.csproj') and '$(UseLocalProjectReferences)' != 'false'" />
+    <PackageReference Include="Glacier.Graphics" Condition="!Exists('../../../Glacier.Graphics/src/Glacier.Graphics/Glacier.Graphics.csproj') or '$(UseLocalProjectReferences)' == 'false'" />
+
+    <ProjectReference Include="../../../Glacier.Plot/src/Glacier.Plot/Glacier.Plot.csproj" Condition="Exists('../../../Glacier.Plot/src/Glacier.Plot/Glacier.Plot.csproj') and '$(UseLocalProjectReferences)' != 'false'" />
+    <PackageReference Include="Glacier.Plot" Condition="!Exists('../../../Glacier.Plot/src/Glacier.Plot/Glacier.Plot.csproj') or '$(UseLocalProjectReferences)' == 'false'" />
+
+    <ProjectReference Include="../../../Glacier.Polaris/src/Glacier.Polaris/Glacier.Polaris.csproj" Condition="Exists('../../../Glacier.Polaris/src/Glacier.Polaris/Glacier.Polaris.csproj') and '$(UseLocalProjectReferences)' != 'false'" />
+    <PackageReference Include="Glacier.Polaris" Condition="!Exists('../../../Glacier.Polaris/src/Glacier.Polaris/Glacier.Polaris.csproj') or '$(UseLocalProjectReferences)' == 'false'" />
   </ItemGroup>
 </Project>

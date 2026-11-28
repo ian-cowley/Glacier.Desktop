@@ -10,7 +10,7 @@ using Glacier.Graphics.Vector;
 using Glacier.Desktop.Windowing.Platform;
 
 /// <summary>
-/// Hardware/software window renderer backed by Glacier.Graphics and Glacier.Windowing.
+/// Software window renderer backed by Glacier.Graphics and optional swapchain presentation.
 /// Pure managed C# .NET 10 execution with zero third-party native binary dependencies.
 /// </summary>
 public sealed unsafe class GlacierGraphicsRenderer : IWindowRenderer
@@ -89,7 +89,7 @@ public sealed unsafe class GlacierGraphicsRenderer : IWindowRenderer
 }
 
 /// <summary>
-/// Window factory bridging Glacier.Desktop UI with Glacier.Windowing platform windows.
+/// Window factory bridging Glacier.Desktop UI with <see cref="WindowFactory"/> platform windows.
 /// </summary>
 public static class GlacierDesktopWindowFactory
 {
