@@ -171,7 +171,11 @@ public sealed unsafe class AlsaAudioDevice : IAudioDevice
 
         if (_pcmHandle != IntPtr.Zero)
         {
-            try { LibAsound.snd_pcm_close(_pcmHandle); } catch { }
+            try { LibAsound.snd_pcm_close(_pcmHandle); }
+            catch (Exception ex) when (ex is DllNotFoundException or EntryPointNotFoundException or InvalidOperationException or System.Runtime.InteropServices.ExternalException)
+            {
+                System.Diagnostics.Trace.TraceWarning($"[AlsaAudioDevice] snd_pcm_close failed: {ex.Message}");
+            }
             _pcmHandle = IntPtr.Zero;
         }
 

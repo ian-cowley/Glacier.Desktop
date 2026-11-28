@@ -231,8 +231,9 @@ public sealed unsafe partial class CoreAudioDevice : IAudioDevice
                 AudioUnitUninitialize(_audioUnit);
                 AudioComponentInstanceDispose(_audioUnit);
             }
-            catch
+            catch (Exception ex) when (ex is System.Runtime.InteropServices.ExternalException or DllNotFoundException or EntryPointNotFoundException or InvalidOperationException or ObjectDisposedException)
             {
+                System.Diagnostics.Trace.TraceWarning($"[CoreAudioDevice] Native AudioUnit dispose failed: {ex.Message}");
             }
             _audioUnit = IntPtr.Zero;
         }

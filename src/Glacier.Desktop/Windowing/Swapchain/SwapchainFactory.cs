@@ -74,8 +74,9 @@ public static class SwapchainFactory
                             return new Metal.MetalSwapchain(layer, desc);
                         }
                     }
-                    catch
+                    catch (Exception ex)
                     {
+                        System.Diagnostics.Trace.TraceWarning($"[SwapchainFactory] MetalSwapchain unavailable, falling back to SoftwareSwapchain: {ex.Message}");
                     }
                     return new Software.SoftwareSwapchain(desc, window);
                 }

@@ -138,7 +138,11 @@ public sealed partial class AndroidNativeWindow : IWindow
         Closing?.Invoke();
         if (_nativeWindow != IntPtr.Zero && OperatingSystem.IsAndroid())
         {
-            try { ANativeWindow_release(_nativeWindow); } catch { }
+            try { ANativeWindow_release(_nativeWindow); }
+            catch (Exception ex) when (ex is DllNotFoundException or EntryPointNotFoundException or InvalidOperationException or System.Runtime.InteropServices.ExternalException)
+            {
+                System.Diagnostics.Trace.TraceWarning($"[AndroidNativeWindow] ANativeWindow_release failed: {ex.Message}");
+            }
         }
         _nativeWindow = IntPtr.Zero;
 

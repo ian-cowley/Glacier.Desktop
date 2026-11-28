@@ -288,7 +288,11 @@ public sealed unsafe class WasapiAudioStream : IAudioStream
 
             if (avrtHandle != IntPtr.Zero)
             {
-                try { AvrtInterop.AvRevertMmThreadCharacteristics(avrtHandle); } catch { }
+                try { AvrtInterop.AvRevertMmThreadCharacteristics(avrtHandle); }
+                catch (Exception ex) when (ex is DllNotFoundException or EntryPointNotFoundException or InvalidOperationException or System.Runtime.InteropServices.ExternalException)
+                {
+                    System.Diagnostics.Trace.TraceWarning($"[WasapiAudioStream] AvRevertMmThreadCharacteristics failed: {ex.Message}");
+                }
             }
 
             if (mustUninit)

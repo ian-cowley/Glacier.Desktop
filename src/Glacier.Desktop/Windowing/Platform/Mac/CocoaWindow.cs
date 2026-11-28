@@ -155,8 +155,9 @@ public sealed class CocoaWindow : IWindow
                 IntPtr closeSel = LibObjC.sel_registerName("close");
                 LibObjC.objc_msgSend(_nsWindow, closeSel);
             }
-            catch
+            catch (Exception ex) when (ex is System.Runtime.InteropServices.ExternalException or DllNotFoundException or EntryPointNotFoundException or InvalidOperationException or ObjectDisposedException)
             {
+                System.Diagnostics.Trace.TraceWarning($"[CocoaWindow] NSWindow close failed: {ex.Message}");
             }
         }
         _nsWindow = IntPtr.Zero;
